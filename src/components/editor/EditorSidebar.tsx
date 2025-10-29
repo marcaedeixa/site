@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Element, useEditorStore } from '@/hooks/useEditorStore'
 import ActorsTab from './ActorsTab'
-import { Palette, Settings, Layers, Users, Lock, Unlock, Theater } from 'lucide-react'
+import { BasicShapesTab } from './BasicShapesTab'
+import { Palette, Settings, Layers, Users, Lock, Unlock, Theater, Shapes } from 'lucide-react'
 
 interface EditorSidebarProps {
   selectedElements: string[]
@@ -40,6 +41,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     setOpacity,
     setFontSize,
     createStage,
+    combineShapesIntoStage,
     lockGroup,
     unlockGroup,
     isElementLocked,
@@ -126,6 +128,11 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     })
   }
 
+  const handleCombineShapes = () => {
+    // This function is no longer needed as BasicShapesTab now uses combineShapesIntoStage directly
+    // Keeping for backward compatibility but it won't be called
+  }
+
   const handlePositionChange = (property: 'x' | 'y', value: string) => {
     const numValue = parseFloat(value)
     if (isNaN(numValue)) return
@@ -187,7 +194,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="properties" className="flex items-center justify-center">
             <Settings className="h-4 w-4" />
           </TabsTrigger>
@@ -196,6 +203,9 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
           </TabsTrigger>
           <TabsTrigger value="layers" className="flex items-center justify-center">
             <Layers className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger value="shapes" className="flex items-center justify-center">
+            <Shapes className="h-4 w-4" />
           </TabsTrigger>
           <TabsTrigger value="actors" className="flex items-center justify-center">
             <Users className="h-4 w-4" />
@@ -416,28 +426,86 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedElements.length >= 1 && (
-                  <>
-                    <Button
-                      onClick={() => createStage(selectedElements)}
-                      className="w-full"
-                      size="sm"
-                      variant="default"
-                    >
-                      <Theater className="h-4 w-4 mr-2" />
-                      Criar Palco
-                    </Button>
-                    <p className="text-xs text-gray-600">
-                      Agrupa e trava os elementos selecionados como base do palco
+                {(() => {
+                  // Detectar existência do grupo Palco
+                  const stageGroup = groups.find(g => g.name === 'Palco')
+
+                  // Se houver seleção de elementos, priorizar ação de criar palco
+                  if (selectedElements.length >= 1) {
+                    return (
+                      <>
+                        <Button
+                          onClick={() => createStage(selectedElements)}
+                          className="w-full"
+                          size="sm"
+                          variant="default"
+                        >
+                          <Theater className="h-4 w-4 mr-2" />
+                          Criar Palco
+                        </Button>
+                        <p className="text-xs text-gray-600">
+                          Agrupa e trava os elementos selecionados como base do palco
+                        </p>
+                      </>
+                    )
+                  }
+
+                  // Sem seleção: alternar entre Editar/Salvar Palco se ele existir
+                  if (stageGroup) {
+                    const isLocked = stageGroup.locked
+                    if (isLocked) {
+                      return (
+                        <>
+                          <Button
+                            onClick={() => {
+                              unlockGroup(stageGroup.id)
+                              // Selecionar elementos do palco para facilitar a edição
+                              const { selectElements } = useEditorStore.getState()
+                              selectElements(stageGroup.elementIds)
+                            }}
+                            className="w-full"
+                            size="sm"
+                            variant="secondary"
+                          >
+                            <Unlock className="h-4 w-4 mr-2" />
+                            Editar Palco
+                          </Button>
+                          <p className="text-xs text-gray-600">
+                            Destrava o palco e permite edição livre dos seus elementos
+                          </p>
+                        </>
+                      )
+                    }
+                    // Palco já destravado: oferecer ação de salvar (travar novamente)
+                    return (
+                      <>
+                        <Button
+                          onClick={() => {
+                            lockGroup(stageGroup.id)
+                            const { clearSelection } = useEditorStore.getState()
+                            clearSelection()
+                          }}
+                          className="w-full"
+                          size="sm"
+                          variant="default"
+                        >
+                          <Lock className="h-4 w-4 mr-2" />
+                          Salvar Palco
+                        </Button>
+                        <p className="text-xs text-gray-600">
+                          Trava novamente o palco e limpa a seleção
+                        </p>
+                      </>
+                    )
+                  }
+
+                  // Estado neutro: sem seleção e sem palco
+                  return (
+                    <p className="text-xs text-gray-500 text-center py-2">
+                      Selecione elementos para criar um palco
                     </p>
-                  </>
-                )}
-                
-                {selectedElements.length === 0 && (
-                  <p className="text-xs text-gray-500 text-center py-2">
-                    Selecione elementos para criar um palco
-                  </p>
-                )}
+                  )
+                })()}
               </CardContent>
             </Card>
             
@@ -587,6 +655,11 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="shapes" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
+            <BasicShapesTab onCombineShapes={handleCombineShapes} />
+          </TabsContent>
+
 
           <TabsContent value="actors" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
             <ActorsTab />

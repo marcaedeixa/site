@@ -3,6 +3,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
 import { Element, Point, Tool, Viewport, useEditorStore } from '@/hooks/useEditorStore'
 import { ActorModal } from './ActorModal'
+import { createUnifiedStageSync, extractPathData } from '@/lib/svgUtils'
 
 interface EditorCanvasProps {
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -59,7 +60,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const [isDragOver, setIsDragOver] = useState(false)
 
   // Get slideshow state from store
-  const { isPlayingSlideshow, isTransitioning } = useEditorStore()
+  const { stageConfig, isPlayingSlideshow, isTransitioning } = useEditorStore()
 
   useImperativeHandle(ref, () => canvasRef.current!)
 
@@ -216,25 +217,49 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         return point.x >= x && point.x <= x + textWidth && point.y >= y - textHeight && point.y <= y
       
       case 'path':
-        // Check if point is near any line segment in the path
-        if (!element.points || element.points.length < 2) return false
-        
-        for (let i = 0; i < element.points.length - 1; i++) {
-          const p1 = element.points[i]
-          const p2 = element.points[i + 1]
-          
-          const segmentLength = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
-          if (segmentLength === 0) continue
-          
-          const t = Math.max(0, Math.min(1, 
-            ((point.x - p1.x) * (p2.x - p1.x) + (point.y - p1.y) * (p2.y - p1.y)) / (segmentLength ** 2)
-          ))
-          
-          const closestX = p1.x + t * (p2.x - p1.x)
-          const closestY = p1.y + t * (p2.y - p1.y)
-          const pathDistance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2)
-          
-          if (pathDistance <= 5) return true
+        if (element.pathData) {
+          // Precise hit detection for SVG path with transform based on x/y/width/height
+          try {
+            const path2D = new Path2D(element.pathData)
+            const tempCanvas = document.createElement('canvas')
+            const tempCtx = tempCanvas.getContext('2d')
+            if (tempCtx) {
+              const pb = (element as any).pathBounds || { x, y, width, height }
+              const sx = pb.width ? (width / pb.width) : 1
+              const sy = pb.height ? (height / pb.height) : 1
+              tempCtx.save()
+              // Apply same transform used in rendering
+              tempCtx.translate(x - pb.x, y - pb.y)
+              tempCtx.scale(sx, sy)
+              const hit = tempCtx.isPointInPath(path2D, point.x, point.y) ||
+                          tempCtx.isPointInStroke(path2D, point.x, point.y)
+              tempCtx.restore()
+              return hit
+            }
+          } catch (error) {
+            console.warn('Error in path hit detection, falling back to bounding box:', error)
+          }
+          // Fallback to bounding box if path detection fails
+          return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
+        } else if (element.points && element.points.length >= 2) {
+          // Check if point is near any line segment in the freehand path
+          for (let i = 0; i < element.points.length - 1; i++) {
+            const p1 = element.points[i]
+            const p2 = element.points[i + 1]
+            
+            const segmentLength = Math.sqrt((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2)
+            if (segmentLength === 0) continue
+            
+            const t = Math.max(0, Math.min(1, 
+              ((point.x - p1.x) * (p2.x - p1.x) + (point.y - p1.y) * (p2.y - p1.y)) / (segmentLength ** 2)
+            ))
+            
+            const closestX = p1.x + t * (p2.x - p1.x)
+            const closestY = p1.y + t * (p2.y - p1.y)
+            const pathDistance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2)
+            
+            if (pathDistance <= 5) return true
+          }
         }
         
         return false
@@ -252,6 +277,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
         }
       
+      case 'stage':
+        // Stage hit detection - treat as rectangle
+        return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
+      
       default:
         return false
     }
@@ -259,14 +288,17 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   // Find element at point (optimized with zIndex priority)
   const getElementAtPoint = useCallback((point: Point): Element | null => {
-    const { isElementLocked } = useEditorStore.getState()
-    
     // Quick bounds check first, then detailed hit detection
     const candidateElements = elements.filter(element => {
-      const { x, y, width = 0, height = 0 } = element
-      // Quick bounding box check and exclude locked elements
-      return !isElementLocked(element.id) &&
-             point.x >= x - 5 && point.x <= x + width + 5 && 
+      const { x, y, width = 0, height = 0, type } = element
+      
+      // For 'path' elements with SVG pathData, skip quick bbox filter to avoid false negatives
+      if (type === 'path' && (element as any).pathData) {
+        return true
+      }
+      
+      // Otherwise, use bounding box quick filter
+      return point.x >= x - 5 && point.x <= x + width + 5 && 
              point.y >= y - 5 && point.y <= y + height + 5
     })
     
@@ -341,6 +373,22 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         { id: 'end', x: endX - handleSize/2, y: endY - handleSize/2, cursor: 'move' },
         { id: 'curve', x: curveX - handleSize/2, y: curveY - handleSize/2, cursor: 'crosshair' }
       )
+    } else if (type === 'path' && element.pathData) {
+      // For path elements from boolean operations, add corner and edge handles
+      handles.push(
+        { id: 'nw', x: x - handleSize/2, y: y - handleSize/2, cursor: 'nw-resize' },
+        { id: 'ne', x: x + width - handleSize/2, y: y - handleSize/2, cursor: 'ne-resize' },
+        { id: 'sw', x: x - handleSize/2, y: y + height - handleSize/2, cursor: 'sw-resize' },
+        { id: 'se', x: x + width - handleSize/2, y: y + height - handleSize/2, cursor: 'se-resize' }
+      )
+      
+      // Edge handles
+      handles.push(
+        { id: 'n', x: x + width/2 - handleSize/2, y: y - handleSize/2, cursor: 'n-resize' },
+        { id: 's', x: x + width/2 - handleSize/2, y: y + height - handleSize/2, cursor: 's-resize' },
+        { id: 'w', x: x - handleSize/2, y: y + height/2 - handleSize/2, cursor: 'w-resize' },
+        { id: 'e', x: x + width - handleSize/2, y: y + height/2 - handleSize/2, cursor: 'e-resize' }
+      )
     }
 
     return handles
@@ -381,6 +429,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
     
+    // Enhanced feedback for dragging elements
+    if (draggedElements.length > 0) {
+      setCurrentCursor('grabbing')
+      return
+    }
+    
     if (selectedTool !== 'select') {
       setCurrentCursor('crosshair')
       return
@@ -392,12 +446,15 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       const selectedElement = elements.find(el => el.id === selectedElements[0])
       
       if (selectedElement) {
-        const handleId = getHandleAtPoint(canvasPoint, selectedElement)
-        if (handleId) {
-          const handles = getResizeHandles(selectedElement)
-          const handle = handles.find(h => h.id === handleId)
-          setCurrentCursor(handle?.cursor || 'default')
-          return
+        const { isElementLocked } = useEditorStore.getState()
+        if (!isElementLocked(selectedElement.id)) {
+          const handleId = getHandleAtPoint(canvasPoint, selectedElement)
+          if (handleId) {
+            const handles = getResizeHandles(selectedElement)
+            const handle = handles.find(h => h.id === handleId)
+            setCurrentCursor(handle?.cursor || 'default')
+            return
+          }
         }
       }
     }
@@ -407,11 +464,16 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const hoveredElement = getElementAtPoint(canvasPoint)
     
     if (hoveredElement) {
-      setCurrentCursor('move')
+      // Enhanced feedback for hovering over elements
+      if (selectedElements.includes(hoveredElement.id)) {
+        setCurrentCursor('move') // Selected element ready to move
+      } else {
+        setCurrentCursor('pointer') // Unselected element ready to select
+      }
     } else {
       setCurrentCursor('default')
     }
-  }, [isSpacePressed, isPanning, isResizing, selectedTool, selectedElements, elements, screenToCanvas, getHandleAtPoint, getResizeHandles, getElementAtPoint])
+  }, [isSpacePressed, isPanning, isResizing, draggedElements.length, selectedTool, selectedElements, elements, screenToCanvas, getHandleAtPoint, getResizeHandles, getElementAtPoint])
 
   // Check if element is within selection rectangle
   const isElementInSelection = useCallback((element: Element, start: Point, end: Point): boolean => {
@@ -440,10 +502,16 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
       
       case 'path':
-        if (!element.points || element.points.length === 0) return false
-        return element.points.every(point => 
-          point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
-        )
+        if (element.pathData) {
+          // For SVG path data from boolean operations, use bounding box
+          return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
+        } else if (element.points && element.points.length > 0) {
+          // For freehand paths with points
+          return element.points.every(point => 
+            point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY
+          )
+        }
+        return false
       
       default:
         return false
@@ -452,17 +520,14 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   // Get elements within selection rectangle (optimized with memoization)
   const getElementsInSelection = useCallback((start: Point, end: Point): string[] => {
-    const { isElementLocked } = useEditorStore.getState()
-    
     // Only check elements that could potentially be in the selection area
     const minX = Math.min(start.x, end.x)
     const maxX = Math.max(start.x, end.x)
     const minY = Math.min(start.y, end.y)
     const maxY = Math.max(start.y, end.y)
     
-    // Quick bounds check before detailed intersection and exclude locked elements
+    // Quick bounds check before detailed intersection
     const potentialElements = elements.filter(element => {
-      if (isElementLocked(element.id)) return false
       const { x, y, width = 0, height = 0 } = element
       return !(x > maxX || x + width < minX || y > maxY || y + height < minY)
     })
@@ -486,6 +551,18 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     // Handle middle mouse button or space+drag for panning
     if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
       e.stopPropagation()
+      
+      // Check if stage is configured and locked - prevent panning
+      if (stageConfig && stageConfig.locked) {
+        setTooltip({
+          x: e.clientX,
+          y: e.clientY,
+          text: 'Canvas bloqueado - Palco configurado'
+        })
+        setTimeout(() => setTooltip(null), 2000)
+        return
+      }
+      
       setIsPanning(true)
       setLastPanPoint({ x: e.clientX, y: e.clientY })
       return
@@ -497,6 +574,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       for (const elementId of selectedElements) {
         const element = elements.find(el => el.id === elementId)
         if (element) {
+          // Não iniciar resize para elementos travados
+          const { isElementLocked } = useEditorStore.getState()
+          if (isElementLocked(element.id)) {
+            continue
+          }
           const handleId = getHandleAtPoint(canvasPoint, element)
           if (handleId) {
             // Prevent default to avoid conflicts
@@ -846,10 +928,29 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
               newY = snapToGrid(newY)
             }
             
-            onUpdateElement(elementId, {
-              x: newX,
-              y: newY
-            })
+            // For stage elements, also move the circle properties
+            if (element.type === 'stage' && element.circleX !== undefined && element.circleY !== undefined) {
+              let newCircleX = element.circleX + deltaX
+              let newCircleY = element.circleY + deltaY
+              
+              // Apply snap to grid for circle as well
+              if (snapEnabled) {
+                newCircleX = snapToGrid(newCircleX)
+                newCircleY = snapToGrid(newCircleY)
+              }
+              
+              onUpdateElement(elementId, {
+                x: newX,
+                y: newY,
+                circleX: newCircleX,
+                circleY: newCircleY
+              })
+            } else {
+              onUpdateElement(elementId, {
+                x: newX,
+                y: newY
+              })
+            }
           }
         })
       }
@@ -929,10 +1030,39 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     setLastPanPoint(null)
     setDraggedElements([])
     setDragOffset({ x: 0, y: 0 })
-    // Save to history for undo/redo when finishing resize
-    if (isResizing && selectedElements.length === 1) {
-      const { saveToHistory } = useEditorStore.getState()
-      saveToHistory()
+    // Apply resize changes and save to history when finishing resize
+    if (isResizing && resizePreview && selectedElements.length === 1) {
+      const elementId = selectedElements[0]
+      const element = elements.find(el => el.id === elementId)
+      
+      if (element) {
+        const updates: Partial<Element> = {
+          x: resizePreview.x,
+          y: resizePreview.y,
+          width: resizePreview.width,
+          height: resizePreview.height,
+          ...(resizePreview.borderRadius !== undefined && { borderRadius: resizePreview.borderRadius })
+        }
+        
+        // Update pathBounds for path elements with pathData to maintain consistency
+        if (element.type === 'path' && element.pathData && element.pathBounds) {
+          const originalBounds = element.pathBounds
+          const scaleX = resizePreview.width / (element.width || 1)
+          const scaleY = resizePreview.height / (element.height || 1)
+          
+          updates.pathBounds = {
+            x: resizePreview.x,
+            y: resizePreview.y,
+            width: originalBounds.width * scaleX,
+            height: originalBounds.height * scaleY
+          }
+        }
+        
+        onUpdateElement(elementId, updates)
+        
+        const { saveToHistory } = useEditorStore.getState()
+        saveToHistory()
+      }
     }
     
     setIsResizing(false)
@@ -945,6 +1075,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   // Handle wheel for zoom and horizontal scroll
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    // Check if stage is configured and locked - prevent zoom and scroll
+    if (stageConfig && stageConfig.locked) {
+      e.preventDefault()
+      return
+    }
+    
     if (e.ctrlKey || e.metaKey) {
       // Zoom with Ctrl+scroll
       e.preventDefault()
@@ -981,7 +1117,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         x: viewport.x + deltaX
       })
     }
-  }, [viewport, onUpdateViewport])
+  }, [viewport, onUpdateViewport, stageConfig])
 
   // Render function
   const render = useCallback(() => {
@@ -1008,10 +1144,24 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     // Draw grid
     drawGrid(ctx, viewport)
 
+    // Draw stage (behind elements but above grid)
+    drawStage(ctx, viewport)
+
     // Draw elements sorted by zIndex (lowest to highest)
     const sortedElements = [...elements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
     sortedElements.forEach(element => {
-      drawElement(ctx, element, selectedElements.includes(element.id))
+      const isSelected = selectedElements.includes(element.id)
+      const isBeingDragged = draggedElements.includes(element.id)
+      
+      if (isBeingDragged) {
+        // Draw dragged elements with reduced opacity for visual feedback
+        ctx.save()
+        ctx.globalAlpha = 0.7
+        drawElement(ctx, element, isSelected)
+        ctx.restore()
+      } else {
+        drawElement(ctx, element, isSelected)
+      }
     })
 
     // Draw current element being drawn
@@ -1057,7 +1207,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     ctx.restore()
-  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd])
+  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig])
 
   // Draw grid
   const drawGrid = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {
@@ -1083,6 +1233,73 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       ctx.lineTo(endX, y)
     }
     ctx.stroke()
+  }
+
+  // Draw stage
+  const drawStage = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {
+    if (!stageConfig || !stageConfig.visible) return
+    // Não desenhar overlay de palco se já existir um elemento do tipo 'stage'
+    if (elements && elements.some(el => el.type === 'stage')) {
+      return
+    }
+
+    ctx.save()
+    
+    const { x, y, width, height, shape, backgroundColor, borderColor, borderWidth } = stageConfig
+    
+    // Set styles
+    ctx.fillStyle = backgroundColor
+    ctx.strokeStyle = borderColor
+    ctx.lineWidth = borderWidth / viewport.zoom
+    ctx.globalAlpha = 1
+
+    // Draw based on shape
+    switch (shape) {
+      case 'rectangle':
+        ctx.fillRect(x, y, width, height)
+        if (borderWidth > 0) {
+          ctx.strokeRect(x, y, width, height)
+        }
+        break
+
+      case 'circle':
+        const radius = Math.min(width, height) / 2
+        const centerX = x + width / 2
+        const centerY = y + height / 2
+        
+        ctx.beginPath()
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
+        ctx.fill()
+        if (borderWidth > 0) {
+          ctx.stroke()
+        }
+        break
+
+      case 'oval':
+        const radiusX = width / 2
+        const radiusY = height / 2
+        const ovalCenterX = x + radiusX
+        const ovalCenterY = y + radiusY
+        
+        ctx.beginPath()
+        ctx.ellipse(ovalCenterX, ovalCenterY, radiusX, radiusY, 0, 0, 2 * Math.PI)
+        ctx.fill()
+        if (borderWidth > 0) {
+          ctx.stroke()
+        }
+        break
+    }
+
+    // Draw stage label if locked
+    if (stageConfig.locked) {
+      ctx.fillStyle = '#ff0000'
+      ctx.font = `${12 / viewport.zoom}px Arial`
+      ctx.textAlign = 'left'
+      ctx.textBaseline = 'top'
+      ctx.fillText('🔒 PALCO BLOQUEADO', x + 5, y + 5)
+    }
+
+    ctx.restore()
   }
 
   // Draw element
@@ -1202,7 +1419,30 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         break
 
       case 'path':
-        if (element.points && element.points.length > 1) {
+        if (element.pathData) {
+          // Render SVG path data from boolean operations with transform
+          const path2D = new Path2D(element.pathData)
+          const pb = (element as any).pathBounds || { x, y, width, height }
+          // Use current element dimensions for consistent scaling during resize
+          const currentWidth = element.width || width
+          const currentHeight = element.height || height
+          const sx = pb.width ? (currentWidth / pb.width) : 1
+          const sy = pb.height ? (currentHeight / pb.height) : 1
+          ctx.save()
+          ctx.translate(x - pb.x, y - pb.y)
+          ctx.scale(sx, sy)
+          if (element.fillColor && element.fillColor !== 'transparent') {
+            ctx.fillStyle = element.fillColor
+            ctx.fill(path2D)
+          }
+          if (element.strokeColor) {
+            ctx.strokeStyle = element.strokeColor
+            ctx.lineWidth = (element.strokeWidth || 1) / viewport.zoom
+            ctx.stroke(path2D)
+          }
+          ctx.restore()
+        } else if (element.points && element.points.length > 1) {
+          // Render freehand path
           ctx.beginPath()
           ctx.moveTo(element.points[0].x, element.points[0].y)
           element.points.slice(1).forEach(point => {
@@ -1287,6 +1527,89 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ctx.restore()
         }
         break
+
+      case 'stage':
+        // Draw unified stage shape using Paper.js for better quality
+        if (element.circleX !== undefined && element.circleY !== undefined && 
+            element.circleWidth !== undefined && element.circleHeight !== undefined) {
+          ctx.save()
+          
+          try {
+            // Create unified stage path using Paper.js
+            const stagePathData = createUnifiedStageSync(
+              { x, y, width, height },
+              { 
+                x: element.circleX, 
+                y: element.circleY, 
+                width: element.circleWidth, 
+                height: element.circleHeight 
+              }
+            )
+            
+            if (stagePathData) {
+              // Create Path2D from the unified path data
+              const stagePath = new Path2D(stagePathData)
+              
+              // Fill the unified shape
+              if (element.fillColor !== 'transparent') {
+                ctx.fillStyle = element.fillColor
+                ctx.fill(stagePath)
+              }
+              
+              // Stroke the unified outline
+              ctx.strokeStyle = element.strokeColor
+              ctx.lineWidth = element.strokeWidth / viewport.zoom
+              ctx.stroke(stagePath)
+            } else {
+              // Fallback to simple union if Paper.js fails
+              const stagePath = new Path2D()
+              stagePath.rect(x, y, width, height)
+              
+              const circleRadius = Math.min(element.circleWidth, element.circleHeight) / 2
+              const circleCenterX = element.circleX + circleRadius
+              const circleCenterY = element.circleY + circleRadius
+              stagePath.arc(circleCenterX, circleCenterY, circleRadius, 0, 2 * Math.PI)
+              
+              if (element.fillColor !== 'transparent') {
+                ctx.fillStyle = element.fillColor
+                ctx.fill(stagePath, 'nonzero')
+              }
+              
+              ctx.strokeStyle = element.strokeColor
+              ctx.lineWidth = element.strokeWidth / viewport.zoom
+              ctx.stroke(stagePath)
+            }
+          } catch (error) {
+            console.warn('Paper.js stage rendering failed, using fallback:', error)
+            
+            // Simple fallback rendering
+            const stagePath = new Path2D()
+            stagePath.rect(x, y, width, height)
+            
+            const circleRadius = Math.min(element.circleWidth, element.circleHeight) / 2
+            const circleCenterX = element.circleX + circleRadius
+            const circleCenterY = element.circleY + circleRadius
+            stagePath.arc(circleCenterX, circleCenterY, circleRadius, 0, 2 * Math.PI)
+            
+            if (element.fillColor !== 'transparent') {
+              ctx.fillStyle = element.fillColor
+              ctx.fill(stagePath, 'nonzero')
+            }
+            
+            ctx.strokeStyle = element.strokeColor
+            ctx.lineWidth = element.strokeWidth / viewport.zoom
+            ctx.stroke(stagePath)
+          }
+          
+          ctx.restore()
+        } else {
+          // Fallback: draw just rectangle if circle properties are missing
+          if (element.fillColor !== 'transparent') {
+            ctx.fillRect(x, y, width, height)
+          }
+          ctx.strokeRect(x, y, width, height)
+        }
+        break
     }
 
     // Draw group indicator
@@ -1300,6 +1623,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       switch (element.type) {
         case 'rectangle':
         case 'text':
+        case 'stage':
           ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
           break
         case 'circle':
@@ -1337,6 +1661,58 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         case 'text':
           ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
           break
+        case 'stage':
+          // Draw unified stage selection outline using Paper.js
+          if (element.circleX !== undefined && element.circleY !== undefined && 
+              element.circleWidth !== undefined && element.circleHeight !== undefined) {
+            
+            try {
+              // Create unified stage path with expanded outline using Paper.js
+              const stagePathData = createUnifiedStageSync(
+                { x: x - 2, y: y - 2, width: width + 4, height: height + 4 },
+                { 
+                  x: element.circleX - 2, 
+                  y: element.circleY - 2, 
+                  width: element.circleWidth + 4, 
+                  height: element.circleHeight + 4 
+                }
+              )
+              
+              if (stagePathData) {
+                // Create Path2D from the unified path data
+                const selectionPath = new Path2D(stagePathData)
+                ctx.stroke(selectionPath)
+              } else {
+                // Fallback to simple outline
+                ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+                
+                const circleRadius = Math.min(element.circleWidth, element.circleHeight) / 2
+                const circleCenterX = element.circleX + circleRadius
+                const circleCenterY = element.circleY + circleRadius
+                
+                ctx.beginPath()
+                ctx.arc(circleCenterX, circleCenterY, circleRadius + 2, 0, 2 * Math.PI)
+                ctx.stroke()
+              }
+            } catch (error) {
+              console.warn('Paper.js selection outline failed, using fallback:', error)
+              
+              // Simple fallback outline
+              ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+              
+              const circleRadius = Math.min(element.circleWidth, element.circleHeight) / 2
+              const circleCenterX = element.circleX + circleRadius
+              const circleCenterY = element.circleY + circleRadius
+              
+              ctx.beginPath()
+              ctx.arc(circleCenterX, circleCenterY, circleRadius + 2, 0, 2 * Math.PI)
+              ctx.stroke()
+            }
+          } else {
+            // Fallback to rectangle outline
+            ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+          }
+          break
         case 'circle':
           const r = Math.min(width, height) / 2
           ctx.beginPath()
@@ -1353,6 +1729,69 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
           }
           break
+        case 'line':
+        case 'arrow':
+          if (element.points && element.points.length >= 2) {
+            // Draw outline around line/arrow points
+            ctx.beginPath()
+            const padding = 4 / viewport.zoom
+            element.points.forEach((point, index) => {
+              if (index === 0) {
+                ctx.moveTo(point.x - padding, point.y - padding)
+                ctx.lineTo(point.x + padding, point.y - padding)
+                ctx.lineTo(point.x + padding, point.y + padding)
+                ctx.lineTo(point.x - padding, point.y + padding)
+                ctx.closePath()
+              } else {
+                ctx.moveTo(point.x - padding, point.y - padding)
+                ctx.lineTo(point.x + padding, point.y - padding)
+                ctx.lineTo(point.x + padding, point.y + padding)
+                ctx.lineTo(point.x - padding, point.y + padding)
+                ctx.closePath()
+              }
+            })
+            ctx.stroke()
+          } else {
+            // Fallback to rectangle outline
+            ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+          }
+          break
+        case 'path':
+          if (element.pathData) {
+            // Draw selection outline following the actual path instead of bbox
+            try {
+              const path2D = new Path2D(element.pathData)
+              const pb = (element as any).pathBounds || { x, y, width, height }
+              const sx = pb.width ? (width / pb.width) : 1
+              const sy = pb.height ? (height / pb.height) : 1
+              ctx.save()
+              ctx.translate(x - pb.x, y - pb.y)
+              ctx.scale(sx, sy)
+              ctx.lineWidth = 1 / viewport.zoom
+              ctx.stroke(path2D)
+              ctx.restore()
+            } catch {
+              // Fallback to bounding box if Path2D fails
+              ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+            }
+          } else if (element.points && element.points.length > 0) {
+            // For freehand paths, draw outline around the path
+            const padding = 4 / viewport.zoom
+            ctx.beginPath()
+            element.points.forEach((point, index) => {
+              const circleX = point.x - padding
+              const circleY = point.y - padding
+              const circleSize = padding * 2
+              
+              ctx.moveTo(circleX + circleSize, circleY)
+              ctx.arc(point.x, point.y, padding, 0, 2 * Math.PI)
+            })
+            ctx.stroke()
+          } else {
+            // Fallback to rectangle outline
+            ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+          }
+          break
       }
       
       ctx.setLineDash([])
@@ -1360,27 +1799,51 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       // Draw resize handles
       if (selectedElements.length === 1) {
         const handles = element ? getResizeHandles(element as Element) : []
-        const handleSize = 8 / viewport.zoom
+        // Make handles more visible and responsive to zoom level
+        const baseHandleSize = 10
+        const minHandleSize = 8
+        const maxHandleSize = 16
+        const handleSize = Math.max(minHandleSize, Math.min(maxHandleSize, baseHandleSize / viewport.zoom))
         
-        ctx.fillStyle = '#007bff'
-        ctx.strokeStyle = '#ffffff'
-        ctx.lineWidth = 1 / viewport.zoom
+        // Enhanced styling for better visibility
+        ctx.lineWidth = Math.max(1, 2 / viewport.zoom)
         
-        handles.forEach(handle => {
+        // Não desenhar handles para elementos travados
+        const { isElementLocked } = useEditorStore.getState()
+        const isLocked = element ? isElementLocked((element as Element).id) : false
+        if (!isLocked) {
+          handles.forEach(handle => {
           if (handle.id === 'radius') {
-            // Special styling for border radius handle
+            // Special styling for border radius handle with better visibility
             ctx.fillStyle = '#28a745'
+            ctx.strokeStyle = '#ffffff'
             ctx.beginPath()
             ctx.arc(handle.x + handleSize/2, handle.y + handleSize/2, handleSize/2, 0, 2 * Math.PI)
             ctx.fill()
             ctx.stroke()
-            ctx.fillStyle = '#007bff'
+            
+            // Add inner circle for better contrast
+            ctx.fillStyle = '#ffffff'
+            ctx.beginPath()
+            ctx.arc(handle.x + handleSize/2, handle.y + handleSize/2, handleSize/4, 0, 2 * Math.PI)
+            ctx.fill()
           } else {
-            // Regular resize handles
+            // Enhanced regular resize handles with better visibility
+            ctx.fillStyle = '#007bff'
+            ctx.strokeStyle = '#ffffff'
+            
+            // Draw main handle
             ctx.fillRect(handle.x, handle.y, handleSize, handleSize)
             ctx.strokeRect(handle.x, handle.y, handleSize, handleSize)
+            
+            // Add inner highlight for better visibility
+            ctx.fillStyle = '#ffffff'
+            const innerSize = handleSize * 0.3
+            const innerOffset = (handleSize - innerSize) / 2
+            ctx.fillRect(handle.x + innerOffset, handle.y + innerOffset, innerSize, innerSize)
           }
-        })
+          })
+        }
       }
     }
 
@@ -1557,8 +2020,45 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onTouchStart={(e) => {
+          e.preventDefault()
+          const touch = e.touches[0]
+          if (touch) {
+            const mouseEvent = new MouseEvent('mousedown', {
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+              button: 0,
+              buttons: 1
+            })
+            handleMouseDown(mouseEvent as any)
+          }
+        }}
+        onTouchMove={(e) => {
+          e.preventDefault()
+          const touch = e.touches[0]
+          if (touch) {
+            const mouseEvent = new MouseEvent('mousemove', {
+              clientX: touch.clientX,
+              clientY: touch.clientY,
+              button: 0,
+              buttons: 1
+            })
+            handleMouseMove(mouseEvent as any)
+          }
+        }}
+        onTouchEnd={(e) => {
+          e.preventDefault()
+          const mouseEvent = new MouseEvent('mouseup', {
+            clientX: 0,
+            clientY: 0,
+            button: 0,
+            buttons: 0
+          })
+          handleMouseUp(mouseEvent as any)
+        }}
         style={{
-          cursor: currentCursor
+          cursor: currentCursor,
+          touchAction: 'none' // Prevent default touch behaviors
         }}
       />
       

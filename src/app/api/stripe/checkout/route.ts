@@ -6,11 +6,16 @@ import {
 } from '@/lib/stripe-config';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Function to get Supabase client
+function getSupabase() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase configuration missing')
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
 // POST - Create checkout session
 export async function POST(request: NextRequest) {
@@ -26,6 +31,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user exists
+    const supabase = getSupabase()
     const { data: user, error: userError } = await supabase.auth.admin.getUserById(userId);
     
     if (userError || !user) {
@@ -79,6 +85,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get customer from database
+    const supabase = getSupabase()
     const { data: customer, error } = await supabase
       .from('stripe_customers')
       .select('stripe_customer_id')

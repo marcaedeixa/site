@@ -2,17 +2,27 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
 
-// Cliente Supabase com service role (apenas no servidor)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+// Função para criar cliente Supabase com service role
+function getSupabaseAdmin() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase configuration missing')
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
-// Cliente Supabase normal para auth
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// Função para criar cliente Supabase normal
+function getSupabase() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    throw new Error('Supabase configuration missing')
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar usuário admin usando service role
+    const supabaseAdmin = getSupabaseAdmin()
     const { data: adminUserData, error: fetchError } = await supabaseAdmin
       .from('admin_users')
       .select('id, email, password_hash, name, role, is_active, login_attempts, locked_until')
@@ -89,7 +100,8 @@ export async function POST(request: NextRequest) {
     // Criar sessão temporária no Supabase Auth
     const tempPassword = `temp_${adminUserData.id}_${Date.now()}`
     
-    // Tentar fazer login ou criar usuário no auth
+    // Tentar fazer login primeiro (caso o usuário já exista no auth)
+    const supabase = getSupabase()
     let authData
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: adminUserData.email,
@@ -143,6 +155,7 @@ export async function POST(request: NextRequest) {
 // Funções auxiliares
 async function logFailedAttempt(email: string, reason: string) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     await supabaseAdmin
       .from('admin_access_logs')
       .insert({
@@ -159,6 +172,7 @@ async function logFailedAttempt(email: string, reason: string) {
 
 async function incrementFailedAttempts(adminUserId: string) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     const { data: userData } = await supabaseAdmin
       .from('admin_users')
       .select('login_attempts')
@@ -188,6 +202,7 @@ async function incrementFailedAttempts(adminUserId: string) {
 
 async function logSuccessfulLogin(adminUserId: string) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     await supabaseAdmin
       .from('admin_access_logs')
       .insert({

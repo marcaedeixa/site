@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,8 @@ export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -25,22 +27,39 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError('')
+    setSuccess('')
     
     try {
       let result
       if (isLogin) {
         result = await signIn(formData.email, formData.password)
       } else {
-        result = await signUp(formData.email, formData.password)
+        result = await signUp(formData.email, formData.password, formData.name)
       }
       
       if (result.error) {
-        alert(result.error.message)
+        // Tratar diferentes tipos de erro
+        if (result.error.message.includes('Email not confirmed')) {
+          setError('Verifique seu email e clique no link de confirmação antes de fazer login.')
+        } else if (result.error.message.includes('Invalid login credentials')) {
+          setError('Email ou senha incorretos.')
+        } else if (result.error.message.includes('User already registered')) {
+          setError('Este email já está cadastrado. Tente fazer login.')
+        } else {
+          setError(result.error.message)
+        }
       } else {
-        router.push('/dashboard')
+        if (isLogin) {
+          router.push('/dashboard')
+        } else {
+          setSuccess('Conta criada com sucesso! Verifique seu email para confirmar sua conta antes de fazer login.')
+          setIsLogin(true) // Mudar para modo login
+          setFormData({ email: formData.email, password: '', name: '' })
+        }
       }
-    } catch {
-      alert('Erro inesperado. Tente novamente.')
+    } catch (error) {
+      setError('Erro inesperado. Tente novamente.')
     } finally {
       setLoading(false)
     }
@@ -66,6 +85,21 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form className="space-y-6" onSubmit={handleSubmit}>
+            {/* Mensagens de erro e sucesso */}
+            {error && (
+              <div className="flex items-center space-x-2 p-3 bg-red-50 border border-red-200 rounded-md text-red-700">
+                <AlertCircle className="h-5 w-5" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
+            
+            {success && (
+              <div className="flex items-center space-x-2 p-3 bg-green-50 border border-green-200 rounded-md text-green-700">
+                <CheckCircle className="h-5 w-5" />
+                <span className="text-sm">{success}</span>
+              </div>
+            )}
+            
             <div className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">

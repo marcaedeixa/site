@@ -16,7 +16,11 @@ import {
   ChevronsUp,
   ChevronsDown,
   Save,
-  Download
+  Download,
+  Plus,
+  Scissors,
+  Merge,
+  XCircle
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { exportProjectData } from '@/lib/projectData'
@@ -27,6 +31,10 @@ interface EditorTopToolbarProps {
   onGroupElements: () => void
   onUngroupElements: () => void
   onWeldElements: () => void
+  onUnionElements: () => void
+  onSubtractElements: () => void
+  onIntersectElements: () => void
+  onExcludeElements: () => void
 }
 
 export function EditorTopToolbar({ 
@@ -34,7 +42,11 @@ export function EditorTopToolbar({
   selectedElements,
   onGroupElements,
   onUngroupElements,
-  onWeldElements
+  onWeldElements,
+  onUnionElements,
+  onSubtractElements,
+  onIntersectElements,
+  onExcludeElements
 }: EditorTopToolbarProps) {
   
   const handleZoom = (direction: 'in' | 'out' | 'reset') => {
@@ -233,6 +245,54 @@ export function EditorTopToolbar({
           <Combine className="h-4 w-4" />
         </Button>
       </div>
+
+      <Separator orientation="vertical" className="h-6" />
+
+      {/* Boolean Operations */}
+      {selectedElements.length >= 2 && (
+        <>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onUnionElements}
+              title="União (Shift+U)"
+              className="h-8 w-8 p-0"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSubtractElements}
+              title="Subtração (Shift+S)"
+              className="h-8 w-8 p-0"
+            >
+              <Scissors className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onIntersectElements}
+              title="Interseção (Shift+I)"
+              className="h-8 w-8 p-0"
+            >
+              <Merge className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onExcludeElements}
+              title="Exclusão (Shift+E)"
+              className="h-8 w-8 p-0"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Separator orientation="vertical" className="h-6" />
+        </>
+      )}
 
       <Separator orientation="vertical" className="h-6" />
 

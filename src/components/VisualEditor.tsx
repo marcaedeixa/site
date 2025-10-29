@@ -8,6 +8,7 @@ import { EditorSidebar } from './editor/EditorSidebar'
 import { EditorBottomBar } from './editor/EditorBottomBar'
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { saveProjectData, loadProjectData } from '@/lib/projectData'
+import { performBooleanOperation, uniteMultipleShapes, convertElementToShape } from '@/lib/svgUtils'
 
 interface VisualEditorProps {
   projectId: string
@@ -147,6 +148,162 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     }
   }, [selectedElements, weldElements])
 
+  // Boolean operations handlers
+  const handleUnionElements = useCallback(async () => {
+    if (selectedElements.length >= 2) {
+      try {
+        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
+        const result = await uniteMultipleShapes(selectedElementsData)
+        
+        if (result.success && result.svgPath) {
+          // Remove selected elements
+          deleteElements(selectedElements)
+          
+          // Add the unified element
+          addElement({
+            type: 'path',
+            x: result.bounds?.x || 0,
+            y: result.bounds?.y || 0,
+            width: result.bounds?.width || 100,
+            height: result.bounds?.height || 100,
+            strokeColor: selectedElementsData[0].strokeColor,
+            fillColor: selectedElementsData[0].fillColor,
+            strokeWidth: selectedElementsData[0].strokeWidth,
+            opacity: selectedElementsData[0].opacity,
+            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
+            points: [{ x: 0, y: 0 }], // Will be replaced by path data
+            locked: false, // Ensure the new element is not locked
+            // Store path data in a custom property
+            pathData: result.svgPath,
+            pathBounds: result.bounds
+          } as any)
+        }
+      } catch (error) {
+        console.error('Erro na operação de união:', error)
+      }
+    }
+  }, [selectedElements, elements, deleteElements, addElement])
+
+  const handleSubtractElements = useCallback(async () => {
+    if (selectedElements.length >= 2) {
+      try {
+        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
+        const shape1 = convertElementToShape(selectedElementsData[0])
+        const shape2 = convertElementToShape(selectedElementsData[1])
+        
+        if (!shape1 || !shape2) {
+          console.error('Não foi possível converter elementos para shapes')
+          return
+        }
+        
+        const result = await performBooleanOperation(shape1, shape2, 'subtract')
+        
+        if (result.success && result.svgPath) {
+          deleteElements(selectedElements)
+          
+          addElement({
+            type: 'path',
+            x: result.bounds?.x || 0,
+            y: result.bounds?.y || 0,
+            width: result.bounds?.width || 100,
+            height: result.bounds?.height || 100,
+            strokeColor: selectedElementsData[0].strokeColor,
+            fillColor: selectedElementsData[0].fillColor,
+            strokeWidth: selectedElementsData[0].strokeWidth,
+            opacity: selectedElementsData[0].opacity,
+            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
+            points: [{ x: 0, y: 0 }],
+            locked: false, // Ensure the new element is not locked
+            pathData: result.svgPath,
+            pathBounds: result.bounds
+          } as any)
+        }
+      } catch (error) {
+        console.error('Erro na operação de subtração:', error)
+      }
+    }
+  }, [selectedElements, elements, deleteElements, addElement])
+
+  const handleIntersectElements = useCallback(async () => {
+    if (selectedElements.length >= 2) {
+      try {
+        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
+        const shape1 = convertElementToShape(selectedElementsData[0])
+        const shape2 = convertElementToShape(selectedElementsData[1])
+        
+        if (!shape1 || !shape2) {
+          console.error('Não foi possível converter elementos para shapes')
+          return
+        }
+        
+        const result = await performBooleanOperation(shape1, shape2, 'intersect')
+        
+        if (result.success && result.svgPath) {
+          deleteElements(selectedElements)
+          
+          addElement({
+            type: 'path',
+            x: result.bounds?.x || 0,
+            y: result.bounds?.y || 0,
+            width: result.bounds?.width || 100,
+            height: result.bounds?.height || 100,
+            strokeColor: selectedElementsData[0].strokeColor,
+            fillColor: selectedElementsData[0].fillColor,
+            strokeWidth: selectedElementsData[0].strokeWidth,
+            opacity: selectedElementsData[0].opacity,
+            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
+            points: [{ x: 0, y: 0 }],
+            locked: false, // Ensure the new element is not locked
+            pathData: result.svgPath,
+            pathBounds: result.bounds
+          } as any)
+        }
+      } catch (error) {
+        console.error('Erro na operação de interseção:', error)
+      }
+    }
+  }, [selectedElements, elements, deleteElements, addElement])
+
+  const handleExcludeElements = useCallback(async () => {
+    if (selectedElements.length >= 2) {
+      try {
+        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
+        const shape1 = convertElementToShape(selectedElementsData[0])
+        const shape2 = convertElementToShape(selectedElementsData[1])
+        
+        if (!shape1 || !shape2) {
+          console.error('Não foi possível converter elementos para shapes')
+          return
+        }
+        
+        const result = await performBooleanOperation(shape1, shape2, 'exclude')
+        
+        if (result.success && result.svgPath) {
+          deleteElements(selectedElements)
+          
+          addElement({
+            type: 'path',
+            x: result.bounds?.x || 0,
+            y: result.bounds?.y || 0,
+            width: result.bounds?.width || 100,
+            height: result.bounds?.height || 100,
+            strokeColor: selectedElementsData[0].strokeColor,
+            fillColor: selectedElementsData[0].fillColor,
+            strokeWidth: selectedElementsData[0].strokeWidth,
+            opacity: selectedElementsData[0].opacity,
+            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
+            points: [{ x: 0, y: 0 }],
+            locked: false, // Ensure the new element is not locked
+            pathData: result.svgPath,
+            pathBounds: result.bounds
+          } as any)
+        }
+      } catch (error) {
+        console.error('Erro na operação de exclusão:', error)
+      }
+    }
+  }, [selectedElements, elements, deleteElements, addElement])
+
   // Helper function to check if user is typing
   const isTyping = useCallback(() => {
     const activeElement = document.activeElement
@@ -181,8 +338,13 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
             redo()
             break
           case 's':
-            e.preventDefault()
-            autoSave()
+            if (e.shiftKey) {
+              e.preventDefault()
+              handleSubtractElements()
+            } else {
+              e.preventDefault()
+              autoSave()
+            }
             break
           case 'a':
             e.preventDefault()
@@ -194,6 +356,27 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
               handleUngroupElements()
             } else {
               handleGroupElements()
+            }
+            break
+          case 'u':
+            if (e.shiftKey) {
+              e.preventDefault()
+              handleUnionElements()
+            } else {
+              e.preventDefault()
+              handleUngroupElements()
+            }
+            break
+          case 'i':
+            if (e.shiftKey) {
+              e.preventDefault()
+              handleIntersectElements()
+            }
+            break
+          case 'e':
+            if (e.shiftKey) {
+              e.preventDefault()
+              handleExcludeElements()
             }
             break
           case ']':
@@ -251,7 +434,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, autoSave, selectElements, clearSelection, deleteElements, selectedElements, elements, handleGroupElements, handleUngroupElements, bringToFront, sendToBack, bringForward, sendBackward, scenes, nextScene, previousScene])
+  }, [undo, redo, autoSave, selectElements, clearSelection, deleteElements, selectedElements, elements, handleGroupElements, handleUngroupElements, handleUnionElements, handleSubtractElements, handleIntersectElements, handleExcludeElements, bringToFront, sendToBack, bringForward, sendBackward, scenes, nextScene, previousScene])
 
   if (isLoading) {
     return (
@@ -273,6 +456,10 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
         onGroupElements={handleGroupElements}
         onUngroupElements={handleUngroupElements}
         onWeldElements={handleWeldElements}
+        onUnionElements={handleUnionElements}
+        onSubtractElements={handleSubtractElements}
+        onIntersectElements={handleIntersectElements}
+        onExcludeElements={handleExcludeElements}
       />
 
       {/* Layout principal com toolbar vertical, canvas e sidebar */}
@@ -289,6 +476,10 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           onGroupElements={handleGroupElements}
           onUngroupElements={handleUngroupElements}
           onWeldElements={handleWeldElements}
+          onUnionElements={handleUnionElements}
+          onSubtractElements={handleSubtractElements}
+          onIntersectElements={handleIntersectElements}
+          onExcludeElements={handleExcludeElements}
         />
 
         {/* Canvas Container no centro */}

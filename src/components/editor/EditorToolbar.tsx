@@ -27,7 +27,11 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUp,
-  ChevronsDown
+  ChevronsDown,
+  Plus,
+  Scissors,
+  Merge,
+  XCircle
 } from 'lucide-react'
 import { Tool, useEditorStore } from '@/hooks/useEditorStore'
 import { cn } from '@/lib/utils'
@@ -44,6 +48,10 @@ interface EditorToolbarProps {
   onGroupElements: () => void
   onUngroupElements: () => void
   onWeldElements: () => void
+  onUnionElements: () => void
+  onSubtractElements: () => void
+  onIntersectElements: () => void
+  onExcludeElements: () => void
 }
 
 const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string; shortcut?: string }[] = [
@@ -68,7 +76,11 @@ export function EditorToolbar({
   selectedElements,
   onGroupElements,
   onUngroupElements,
-  onWeldElements
+  onWeldElements,
+  onUnionElements,
+  onSubtractElements,
+  onIntersectElements,
+  onExcludeElements
 }: EditorToolbarProps) {
   const handleToolSelect = (tool: Tool) => {
     const { setSelectedTool } = useEditorStore.getState()
@@ -225,6 +237,50 @@ export function EditorToolbar({
           )
         })}
       </div>
+
+      <Separator orientation="horizontal" className="w-full" />
+
+      {/* Boolean Operations */}
+      {selectedElements.length >= 2 && (
+        <div className="flex flex-col gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onUnionElements}
+            title="União - Combinar formas (Ctrl+Shift+U)"
+            className="w-12 h-12 p-0 hover:bg-green-100"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onSubtractElements}
+            title="Subtração - Remover forma superior (Ctrl+Shift+S)"
+            className="w-12 h-12 p-0 hover:bg-red-100"
+          >
+            <Scissors className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onIntersectElements}
+            title="Interseção - Manter apenas sobreposição (Ctrl+Shift+I)"
+            className="w-12 h-12 p-0 hover:bg-blue-100"
+          >
+            <Merge className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onExcludeElements}
+            title="Exclusão - Remover sobreposição (Ctrl+Shift+E)"
+            className="w-12 h-12 p-0 hover:bg-yellow-100"
+          >
+            <XCircle className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
     </div>
   )

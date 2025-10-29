@@ -10,11 +10,12 @@ export const getServerStripe = (): Stripe => {
   }
   
   if (!_stripe) {
-    if (!process.env.STRIPE_SECRET_KEY) {
-      throw new Error('STRIPE_SECRET_KEY is not defined in environment variables');
+    const secretKey = process.env.STRIPE_SECRET_KEY;
+    if (!secretKey) {
+      throw new Error('Stripe is disabled: STRIPE_SECRET_KEY not set');
     }
-    
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+
+    _stripe = new Stripe(secretKey, {
       apiVersion: '2024-12-18.acacia',
       typescript: true,
     });
@@ -25,16 +26,17 @@ export const getServerStripe = (): Stripe => {
 
 // Use getServerStripe() function instead of direct stripe export to avoid client-side initialization
 
-// Client-side Stripe instance
-if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-  throw new Error('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not defined in environment variables');
-}
-
-let stripePromise: Promise<Stripe | null>;
+// Client-side Stripe instance (optional)
+let stripePromise: Promise<Stripe | null> | null = null;
 
 export const getStripe = () => {
+  const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  if (!publishableKey) {
+    // Stripe não está configurado para o cliente
+    return Promise.resolve(null);
+  }
   if (!stripePromise) {
-    stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+    stripePromise = loadStripe(publishableKey);
   }
   return stripePromise;
 };

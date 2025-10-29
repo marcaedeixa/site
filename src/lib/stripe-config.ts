@@ -1,11 +1,16 @@
 import { getServerStripe, STRIPE_CONFIG, STRIPE_PLANS } from './stripe';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client for server-side operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Function to get Supabase client for server-side operations
+function getSupabase() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase configuration missing')
+  }
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )
+}
 
 // Types for Stripe operations
 export interface StripeCustomer {
@@ -52,6 +57,7 @@ export async function createOrRetrieveStripeCustomer(
 ): Promise<string> {
   try {
     // Check if customer already exists in our database
+    const supabase = getSupabase()
     const { data: existingCustomer } = await supabase
       .from('stripe_customers')
       .select('stripe_customer_id')
@@ -246,6 +252,7 @@ export async function saveSubscriptionToDatabase(
   customerId: string
 ): Promise<void> {
   try {
+    const supabase = getSupabase()
     const { error } = await supabase
       .from('stripe_subscriptions')
       .upsert({
@@ -289,6 +296,7 @@ export async function savePaymentToDatabase(
   customerId: string
 ): Promise<void> {
   try {
+    const supabase = getSupabase()
     const { error } = await supabase
       .from('stripe_payments')
       .insert({
@@ -317,6 +325,7 @@ export async function getUserActiveSubscription(
   userId: string
 ): Promise<StripeSubscription | null> {
   try {
+    const supabase = getSupabase()
     const { data, error } = await supabase
       .from('stripe_subscriptions')
       .select(`

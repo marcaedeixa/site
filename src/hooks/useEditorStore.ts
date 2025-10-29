@@ -27,7 +27,7 @@ export interface Group {
 
 export interface Element {
   id: string
-  type: 'rectangle' | 'circle' | 'line' | 'arrow' | 'text' | 'path' | 'actor'
+  type: 'rectangle' | 'circle' | 'line' | 'arrow' | 'text' | 'path' | 'actor' | 'stage'
   x: number
   y: number
   width?: number
@@ -62,12 +62,38 @@ export interface Element {
   curveOffsetY?: number
   // Rectangle specific properties
   borderRadius?: number
+  // Stage specific properties
+  circleX?: number
+  circleY?: number
+  circleWidth?: number
+  circleHeight?: number
+  circleFillColor?: string
+  circleStrokeColor?: string
+  // Path specific properties (for boolean operations)
+  pathData?: string
+  // Original bounds of the pathData (used to transform with x/y/width/height)
+  pathBounds?: { x: number; y: number; width: number; height: number }
+  circleStrokeWidth?: number
 }
 
 export interface Viewport {
   x: number
   y: number
   zoom: number
+}
+
+export interface StageConfig {
+  id: string
+  width: number
+  height: number
+  shape: 'rectangle' | 'circle' | 'oval'
+  backgroundColor: string
+  borderColor: string
+  borderWidth: number
+  x: number
+  y: number
+  visible: boolean
+  locked: boolean
 }
 
 export interface HistoryState {
@@ -82,6 +108,7 @@ export interface Scene {
   elements: Element[]
   groups: Group[]
   viewport: Viewport
+  stageConfig: StageConfig | null
   timestamp: string
   thumbnail?: string
 }
@@ -95,6 +122,9 @@ interface EditorStore {
   viewport: Viewport
   history: HistoryState[]
   historyIndex: number
+  
+  // Stage configuration
+  stageConfig: StageConfig | null
   
   // Scene state
   scenes: Scene[]
@@ -187,6 +217,12 @@ interface EditorStore {
   previousScene: () => void
   setSlideshowInterval: (interval: number) => void
   
+  // Stage operations
+  setStageConfig: (config: StageConfig) => void
+  updateStageConfig: (updates: Partial<StageConfig>) => void
+  removeStageConfig: () => void
+  centerStage: () => void
+  
   // Store reset
   resetStore: () => void
 }
@@ -200,6 +236,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   viewport: { x: 0, y: 0, zoom: 1 },
   history: [],
   historyIndex: -1,
+  
+  // Stage configuration
+  stageConfig: null,
   
   // Scene state
   scenes: [],
@@ -544,12 +583,65 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   
   createStage: (elementIds) => {
     if (elementIds.length < 1) return
-    
-    const { elements } = get()
+
+    const { elements, groups } = get()
     const minZIndex = Math.min(...elements.map(el => el.zIndex || 0))
     const stageZIndex = Math.max(0, minZIndex - 100) // Garantir que o palco fique bem no fundo
-    
-    // Primeiro agrupa os elementos
+
+    // Verificar se já existe um grupo "Palco" para evitar repetição
+    const existingStageGroup = groups.find(g => g.name === 'Palco')
+
+    if (existingStageGroup) {
+      const existingId = existingStageGroup.id
+
+      set((state) => {
+        // Elementos anteriormente no grupo Palco
+        const prevStageElementIds = existingStageGroup.elementIds
+
+        const updatedElements = state.elements.map((el) => {
+          if (elementIds.includes(el.id)) {
+            // Novos elementos do palco: atribuir ao grupo existente e bloquear
+            return {
+              ...el,
+              groupId: existingId,
+              locked: true,
+              zIndex: stageZIndex + elementIds.indexOf(el.id)
+            }
+          }
+          if (prevStageElementIds.includes(el.id) && !elementIds.includes(el.id)) {
+            // Elementos que saem do palco: liberar e remover relação de grupo
+            return {
+              ...el,
+              locked: false,
+              groupId: undefined,
+              // Elevar levemente acima da base do palco
+              zIndex: (el.zIndex || 0) + 200
+            }
+          }
+          // Garantir que outros elementos fiquem acima do palco
+          return el.zIndex <= stageZIndex + elementIds.length
+            ? { ...el, zIndex: (el.zIndex || 0) + 200 }
+            : el
+        })
+
+        const updatedGroups = state.groups.map(g =>
+          g.id === existingId
+            ? { ...g, elementIds: elementIds, locked: true }
+            : g
+        )
+
+        return {
+          groups: updatedGroups,
+          elements: updatedElements,
+          selectedElements: []
+        }
+      })
+
+      get().saveToHistory()
+      return
+    }
+
+    // Não há grupo Palco ainda: criar novo grupo
     const groupId = nanoid()
     const newGroup: Group = {
       id: groupId,
@@ -558,26 +650,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       locked: true,
       name: 'Palco'
     }
-    
+
     set((state) => ({
       groups: [...state.groups, newGroup],
       elements: state.elements.map((el) => {
         if (elementIds.includes(el.id)) {
-          return { 
-            ...el, 
-            groupId, 
+          return {
+            ...el,
+            groupId,
             locked: true,
             zIndex: stageZIndex + elementIds.indexOf(el.id)
           }
         }
         // Garantir que outros elementos fiquem acima do palco
-        return el.zIndex <= stageZIndex + elementIds.length 
-          ? { ...el, zIndex: el.zIndex + 200 }
+        return el.zIndex <= stageZIndex + elementIds.length
+          ? { ...el, zIndex: (el.zIndex || 0) + 200 }
           : el
       }),
       selectedElements: []
     }))
-    
+
     get().saveToHistory()
   },
   
@@ -666,7 +758,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   
   // Scene operations
   addScene: (name) => {
-    const { elements, groups, viewport, scenes } = get()
+    const { elements, groups, viewport, stageConfig, scenes } = get()
     
     const newScene: Scene = {
       id: nanoid(),
@@ -674,6 +766,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       elements: JSON.parse(JSON.stringify(elements)),
       groups: JSON.parse(JSON.stringify(groups)),
       viewport: { ...viewport },
+      stageConfig: stageConfig ? JSON.parse(JSON.stringify(stageConfig)) : null,
       timestamp: new Date().toISOString()
     }
     
@@ -733,6 +826,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       elements: JSON.parse(JSON.stringify(scene.elements)),
       groups: JSON.parse(JSON.stringify(scene.groups)),
       viewport: { ...scene.viewport },
+      stageConfig: scene.stageConfig ? JSON.parse(JSON.stringify(scene.stageConfig)) : null,
       currentSceneIndex: index,
       selectedElements: []
     })
@@ -750,7 +844,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   
   updateCurrentScene: () => {
-    const { scenes, currentSceneIndex, elements, groups, viewport } = get()
+    const { scenes, currentSceneIndex, elements, groups, viewport, stageConfig } = get()
     if (currentSceneIndex < 0 || currentSceneIndex >= scenes.length) return
     
     set((state) => ({
@@ -760,6 +854,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           elements: JSON.parse(JSON.stringify(elements)),
           groups: JSON.parse(JSON.stringify(groups)),
           viewport: { ...viewport },
+          stageConfig: stageConfig ? JSON.parse(JSON.stringify(stageConfig)) : null,
           timestamp: new Date().toISOString()
         } : scene
       )
@@ -862,6 +957,142 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
   
+  // Stage operations
+  setStageConfig: (config) => {
+    set({ stageConfig: config })
+    
+    // Sincronizar stageConfig em todas as cenas
+    const { scenes } = get()
+    if (scenes.length > 0) {
+      set((state) => ({
+        scenes: state.scenes.map(scene => ({
+          ...scene,
+          stageConfig: config ? JSON.parse(JSON.stringify(config)) : null
+        }))
+      }))
+    }
+    
+    // Centralizar o palco após configurá-lo
+    get().centerStage()
+  },
+  
+  updateStageConfig: (updates) => {
+    const { stageConfig, scenes } = get()
+    if (!stageConfig) return
+    
+    const updatedConfig = { ...stageConfig, ...updates }
+    set({ stageConfig: updatedConfig })
+    
+    // Sincronizar stageConfig atualizado em todas as cenas
+    if (scenes.length > 0) {
+      set((state) => ({
+        scenes: state.scenes.map(scene => ({
+          ...scene,
+          stageConfig: JSON.parse(JSON.stringify(updatedConfig))
+        }))
+      }))
+    }
+  },
+  
+  removeStageConfig: () => {
+    set({ stageConfig: null })
+    
+    // Remover stageConfig de todas as cenas
+    const { scenes } = get()
+    if (scenes.length > 0) {
+      set((state) => ({
+        scenes: state.scenes.map(scene => ({
+          ...scene,
+          stageConfig: null
+        }))
+      }))
+    }
+  },
+  
+  centerStage: () => {
+    const { stageConfig, viewport } = get()
+    if (!stageConfig) return
+    
+    // Centralizar o palco no viewport atual
+    // Converter coordenadas do viewport para coordenadas do canvas
+    const viewportCenterX = -viewport.x / viewport.zoom
+    const viewportCenterY = -viewport.y / viewport.zoom
+    
+    // Posicionar o palco no centro do viewport
+    const centerX = viewportCenterX - stageConfig.width / 2
+    const centerY = viewportCenterY - stageConfig.height / 2
+    
+    set({
+      stageConfig: {
+        ...stageConfig,
+        x: centerX,
+        y: centerY
+      }
+    })
+  },
+
+  combineShapesIntoStage: (elementIds) => {
+    if (elementIds.length < 2) return
+    
+    const { elements } = get()
+    const selectedShapes = elementIds
+      .map(id => elements.find(el => el.id === id))
+      .filter(el => el && (el.type === 'rectangle' || el.type === 'circle'))
+    
+    if (selectedShapes.length < 2) return
+    
+    // Find rectangle and circle
+    const rectangle = selectedShapes.find(el => el.type === 'rectangle')
+    const circle = selectedShapes.find(el => el.type === 'circle')
+    
+    if (rectangle && circle) {
+      // Calculate optimal positioning for a natural stage appearance
+      const rectCenterX = rectangle.x + rectangle.width / 2
+      const rectCenterY = rectangle.y + rectangle.height / 2
+      const circleCenterX = circle.x + circle.width / 2
+      const circleCenterY = circle.y + circle.height / 2
+      
+      // Determine the unified bounding box
+      const minX = Math.min(rectangle.x, circle.x)
+      const minY = Math.min(rectangle.y, circle.y)
+      const maxX = Math.max(rectangle.x + rectangle.width, circle.x + circle.width)
+      const maxY = Math.max(rectangle.y + rectangle.height, circle.y + circle.height)
+      
+      // Create a new unified stage element
+      const stageElement: Omit<Element, 'id'> = {
+        type: 'stage',
+        x: rectangle.x,
+        y: rectangle.y,
+        width: rectangle.width,
+        height: rectangle.height,
+        fillColor: rectangle.fillColor || '#f0f0f0',
+        strokeColor: rectangle.strokeColor || '#000000',
+        strokeWidth: rectangle.strokeWidth || 2,
+        opacity: rectangle.opacity || 1,
+        zIndex: Math.min(...elements.map(el => el.zIndex || 0)) - 100,
+        // Store circle properties for rendering (keep user-defined positions)
+        circleX: circle.x,
+        circleY: circle.y,
+        circleWidth: circle.width,
+        circleHeight: circle.height,
+        circleFillColor: rectangle.fillColor || '#f0f0f0', // Use same color as rectangle for unity
+        circleStrokeColor: rectangle.strokeColor || '#000000', // Use same stroke as rectangle
+        circleStrokeWidth: rectangle.strokeWidth || 2 // Use same stroke width
+      }
+      
+      // Remove original shapes and add unified stage
+      set((state) => ({
+        elements: [
+          ...state.elements.filter(el => !elementIds.includes(el.id)),
+          { ...stageElement, id: nanoid() } as Element
+        ],
+        selectedElements: []
+      }))
+      
+      get().saveToHistory()
+    }
+  },
+  
   // Store reset
   resetStore: () => {
     const { slideshowTimer } = get()
@@ -876,6 +1107,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       history: [],
       historyIndex: -1,
       viewport: { x: 0, y: 0, zoom: 1 },
+      stageConfig: null,
       scenes: [],
       currentSceneIndex: -1,
       isPlayingSlideshow: false,
