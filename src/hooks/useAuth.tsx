@@ -10,6 +10,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<{ data?: User | null; error?: Error | null }>
   updateProfile: (updates: { display_name?: string; email?: string }) => Promise<{ data?: User | null; error?: Error | null }>
   updatePassword: (password: string) => Promise<{ data?: User | null; error?: Error | null }>
+  requireAuth: (redirectTo?: string) => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -65,7 +66,15 @@ function useAuthState(): AuthContextType {
     return { data, error }
   }
 
-  return { user, loading, signOut, signIn, signUp, updateProfile, updatePassword }
+  const requireAuth = (redirectTo: string = '/login') => {
+    if (typeof window === 'undefined') return
+    // Só redireciona quando terminar de carregar o estado de auth
+    if (!loading && !user) {
+      window.location.href = redirectTo
+    }
+  }
+
+  return { user, loading, signOut, signIn, signUp, updateProfile, updatePassword, requireAuth }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -79,4 +88,20 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
+}
+
+// Hook utilitário para exigir autenticação em componentes
+export function useRequireAuth(options?: { redirectTo?: string; onAuthenticated?: (user: User) => void }) {
+  const { user, loading, requireAuth } = useAuth()
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        requireAuth(options?.redirectTo ?? '/login')
+      } else {
+        options?.onAuthenticated?.(user)
+      }
+    }
+  }, [user, loading])
+
+  return { user, loading }
 }
