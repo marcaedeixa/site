@@ -8,34 +8,144 @@ import {
   RotateCcw,
   Copy,
   Trash2,
-  Group,
-  Ungroup,
-  Combine,
   ChevronUp,
   ChevronDown,
   ChevronsUp,
   ChevronsDown,
   Save,
-  Download
+  Download,
+  Plus,
+  Scissors,
+  Merge,
+  XCircle,
+  User,
+  Box
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { exportProjectData } from '@/lib/projectData'
+import { useState, useEffect } from 'react'
+import { ActorModal } from './ActorModal'
+import { ObjectModal } from './ObjectModal'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/hooks/useAuth'
+import { useParams } from 'next/navigation'
 
 interface EditorTopToolbarProps {
   onSave: () => void
   selectedElements: string[]
-  onGroupElements: () => void
-  onUngroupElements: () => void
-  onWeldElements: () => void
+  onUnionElements: () => void
+  onSubtractElements: () => void
+  onIntersectElements: () => void
+  onExcludeElements: () => void
 }
 
 export function EditorTopToolbar({ 
   onSave,
   selectedElements,
-  onGroupElements,
-  onUngroupElements,
-  onWeldElements
+  onUnionElements,
+  onSubtractElements,
+  onIntersectElements,
+  onExcludeElements
 }: EditorTopToolbarProps) {
+  const { user } = useAuth()
+  const params = useParams()
+  const projectId = params?.projectId as string
+  
+  // Estado para controlar o modal de ator
+  const [showActorModal, setShowActorModal] = useState(false)
+  const [actorModalPosition] = useState({ x: 400, y: 300 })
+  const [actorCount, setActorCount] = useState(0)
+  
+  // Estado para controlar o modal de objeto
+  const [showObjectModal, setShowObjectModal] = useState(false)
+  const [objectModalPosition] = useState({ x: 400, y: 300 })
+  const [objectCount, setObjectCount] = useState(0)
+  
+  // Carregar contagem de atores
+  useEffect(() => {
+    const loadActorCount = async () => {
+      if (!projectId || !user) return
+      
+      try {
+        const { count } = await supabase
+          .from('actors')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .eq('user_id', user.id)
+        
+        setActorCount(count || 0)
+      } catch (error) {
+        console.error('Erro ao carregar contagem de atores:', error)
+      }
+    }
+    
+    loadActorCount()
+    
+    // Escutar evento de ator criado
+    const handleActorCreated = () => {
+      loadActorCount()
+    }
+    
+    window.addEventListener('actorCreated', handleActorCreated)
+    return () => window.removeEventListener('actorCreated', handleActorCreated)
+  }, [projectId, user])
+  
+  // Carregar contagem de objetos
+  useEffect(() => {
+    const loadObjectCount = async () => {
+      if (!projectId || !user) return
+      
+      try {
+        const { count } = await supabase
+          .from('objects')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', projectId)
+          .eq('user_id', user.id)
+        
+        setObjectCount(count || 0)
+      } catch (error) {
+        console.error('Erro ao carregar contagem de objetos:', error)
+      }
+    }
+    
+    loadObjectCount()
+    
+    // Escutar evento de objeto criado
+    const handleObjectCreated = () => {
+      loadObjectCount()
+    }
+    
+    window.addEventListener('objectCreated', handleObjectCreated)
+    return () => window.removeEventListener('objectCreated', handleObjectCreated)
+  }, [projectId, user])
+  
+  // Funções do modal de ator
+  const handleOpenActorModal = () => {
+    setShowActorModal(true)
+  }
+  
+  const handleActorModalClose = () => {
+    setShowActorModal(false)
+  }
+  
+  // Funções do modal de objeto
+  const handleOpenObjectModal = () => {
+    setShowObjectModal(true)
+  }
+  
+  const handleObjectModalClose = () => {
+    setShowObjectModal(false)
+  }
+  
+  const handleActorModalSave = () => {
+    setShowActorModal(false)
+    // A contagem será atualizada pelo evento actorCreated
+  }
+  
+  const handleObjectModalSave = () => {
+    setShowObjectModal(false)
+    // A contagem será atualizada pelo evento objectCreated
+  }
   
   const handleZoom = (direction: 'in' | 'out' | 'reset') => {
     const { viewport, setViewport } = useEditorStore.getState()
@@ -139,8 +249,10 @@ export function EditorTopToolbar({
   }
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4">
-      {/* Zoom Controls */}
+    <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 justify-between">
+      {/* Controles principais */}
+      <div className="flex items-center gap-4">
+        {/* Zoom Controls */}
       <div className="flex items-center gap-1">
         <Button
           variant="ghost"
@@ -198,41 +310,53 @@ export function EditorTopToolbar({
         </Button>
       </div>
 
-      <Separator orientation="vertical" className="h-6" />
 
-      {/* Group Actions */}
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onGroupElements}
-          disabled={selectedElements.length < 2}
-          title="Agrupar (Ctrl+G)"
-          className="h-8 w-8 p-0"
-        >
-          <Group className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onUngroupElements}
-          disabled={selectedElements.length === 0}
-          title="Desagrupar (Ctrl+Shift+G)"
-          className="h-8 w-8 p-0"
-        >
-          <Ungroup className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onWeldElements}
-          disabled={selectedElements.length < 2}
-          title="Soldar"
-          className="h-8 w-8 p-0"
-        >
-          <Combine className="h-4 w-4" />
-        </Button>
-      </div>
+
+      {/* Boolean Operations */}
+      {selectedElements.length >= 2 && (
+        <>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onUnionElements}
+              title="União (Shift+U)"
+              className="h-8 w-8 p-0"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onSubtractElements}
+              title="Subtração (Shift+S)"
+              className="h-8 w-8 p-0"
+            >
+              <Scissors className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onIntersectElements}
+              title="Interseção (Shift+I)"
+              className="h-8 w-8 p-0"
+            >
+              <Merge className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onExcludeElements}
+              title="Exclusão (Shift+E)"
+              className="h-8 w-8 p-0"
+            >
+              <XCircle className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Separator orientation="vertical" className="h-6" />
+        </>
+      )}
 
       <Separator orientation="vertical" className="h-6" />
 
@@ -329,6 +453,47 @@ export function EditorTopToolbar({
           </div>
         </div>
       </div>
+      </div>
+
+      {/* Botões de cadastro na extremidade direita */}
+      <div className="flex items-center space-x-2">
+        <Button
+          onClick={handleOpenActorModal}
+          variant="default"
+          size="sm"
+          title="Cadastrar Ator"
+        >
+          <User className="h-4 w-4 mr-2" />
+          Cadastrar Ator
+        </Button>
+        <Button
+          onClick={handleOpenObjectModal}
+          variant="default"
+          size="sm"
+          title="Cadastrar Objeto"
+        >
+          <Box className="h-4 w-4 mr-2" />
+          Cadastrar Objeto
+        </Button>
+      </div>
+
+      {/* Modal de criação de ator */}
+      <ActorModal
+        isOpen={showActorModal}
+        onClose={handleActorModalClose}
+        onSave={handleActorModalSave}
+        position={actorModalPosition}
+        currentActorCount={actorCount}
+      />
+
+      {/* Modal de criação de objeto */}
+      <ObjectModal
+        isOpen={showObjectModal}
+        onClose={handleObjectModalClose}
+        onSave={handleObjectModalSave}
+        position={objectModalPosition}
+        currentObjectCount={objectCount}
+      />
     </div>
   )
 }

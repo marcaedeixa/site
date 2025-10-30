@@ -10,16 +10,19 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Webhook secret
+// Webhook secret (opcional): se não houver, a rota retorna 501
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-if (!webhookSecret) {
-  throw new Error('STRIPE_WEBHOOK_SECRET is not defined in environment variables');
-}
 
 // POST - Handle Stripe webhooks
 export async function POST(request: NextRequest) {
   try {
+    if (!webhookSecret) {
+      return NextResponse.json(
+        { error: 'Stripe desabilitado: STRIPE_WEBHOOK_SECRET ausente' },
+        { status: 501 }
+      );
+    }
+
     const body = await request.text();
     const headersList = headers();
     const signature = headersList.get('stripe-signature');

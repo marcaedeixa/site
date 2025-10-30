@@ -17,7 +17,8 @@ import {
   Film,
   Clock,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Maximize
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
 
@@ -39,7 +40,8 @@ export function EditorBottomBar() {
     pauseSlideshow,
     nextScene,
     previousScene,
-    setSlideshowInterval
+    setSlideshowInterval,
+    startFullscreenSlideshow
   } = useEditorStore()
 
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null)
@@ -139,15 +141,27 @@ export function EditorBottomBar() {
           {/* Controles de slideshow */}
           <div className="flex items-center gap-2">
             {!isPlayingSlideshow ? (
-              <Button
-                onClick={startSlideshow}
-                disabled={scenes.length === 0}
-                size="sm"
-                className="h-7"
-              >
-                <Play className="h-3 w-3 mr-1" />
-                Slideshow
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  onClick={startSlideshow}
+                  disabled={scenes.length === 0}
+                  size="sm"
+                  className="h-7"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  Slideshow
+                </Button>
+                <Button
+                  onClick={startFullscreenSlideshow}
+                  disabled={scenes.length === 0}
+                  size="sm"
+                  variant="outline"
+                  className="h-7 w-7 p-0"
+                  title="Slideshow em tela inteira"
+                >
+                  <Maximize className="h-3 w-3" />
+                </Button>
+              </div>
             ) : (
               <div className="flex items-center gap-1">
                 <Button

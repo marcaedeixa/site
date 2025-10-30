@@ -14,24 +14,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export function useAuth() {
+function useAuthState(): AuthContextType {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
   useEffect(() => {
-    // Get initial session
-    const getSession = async () => {
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession()
       setUser(session?.user ?? null)
       setLoading(false)
     }
 
-    getSession()
+    init()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      async (_event, session) => {
         setUser(session?.user ?? null)
         setLoading(false)
       }
@@ -45,18 +43,12 @@ export function useAuth() {
   }
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     return { data, error }
   }
 
   const signUp = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password
-    })
+    const { data, error } = await supabase.auth.signUp({ email, password })
     return { data, error }
   }
 
@@ -69,37 +61,22 @@ export function useAuth() {
   }
 
   const updatePassword = async (password: string) => {
-    const { data, error } = await supabase.auth.updateUser({
-      password
-    })
+    const { data, error } = await supabase.auth.updateUser({ password })
     return { data, error }
   }
 
-  return {
-    user,
-    loading,
-    signOut,
-    signIn,
-    signUp,
-    updateProfile,
-    updatePassword
-  }
+  return { user, loading, signOut, signIn, signUp, updateProfile, updatePassword }
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const auth = useAuth()
-  
-  return (
-    <AuthContext.Provider value={auth}>
-      {children}
-    </AuthContext.Provider>
-  )
+  const auth = useAuthState()
+  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
 }
 
-export function useAuthContext() {
+export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuthContext must be used within an AuthProvider')
+    throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
 }

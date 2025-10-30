@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { CreateProjectModal } from '@/components/CreateProjectModal'
 import { getProjects, deleteProject } from '@/lib/projects'
+import DebugAuth from '@/components/DebugAuth'
 import ProjectCardSkeleton from '@/components/ProjectCardSkeleton'
 
 interface Project {
@@ -144,14 +145,17 @@ export default function DashboardPage() {
 
   // Callback para quando um novo projeto for criado
   const handleProjectCreated = (newProject: Project) => {
-    setProjects(prev => [newProject, ...prev])
-    // Atualizar cache
-    if (cacheRef.current) {
-      cacheRef.current = {
-        data: [newProject, ...cacheRef.current.data],
-        timestamp: Date.now()
+    // Adicionar um pequeno delay para evitar conflitos com RSC
+    setTimeout(() => {
+      setProjects(prev => [newProject, ...prev])
+      // Atualizar cache
+      if (cacheRef.current) {
+        cacheRef.current = {
+          data: [newProject, ...cacheRef.current.data],
+          timestamp: Date.now()
+        }
       }
-    }
+    }, 100)
   }
   
   // Função para refresh manual
@@ -222,6 +226,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
+      <DebugAuth />
       {/* Header */}
       <header className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

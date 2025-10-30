@@ -9,8 +9,16 @@ import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Element, useEditorStore } from '@/hooks/useEditorStore'
-import ActorsTab from './ActorsTab'
-import { Palette, Settings, Layers, Users, Lock, Unlock, Theater } from 'lucide-react'
+import { ActorsTab } from './ActorsTab'
+import { ObjectsTab } from './ObjectsTab'
+import { DeixaTab } from './DeixaTab'
+import { ToolsTab } from './ToolsTab'
+import { 
+  Palette, Settings, Layers, Users, Box, Lock, Unlock, Theater, MessageSquare, MoreHorizontal,
+  AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Group, Ungroup,
+  GripVertical
+} from 'lucide-react'
 
 interface EditorSidebarProps {
   selectedElements: string[]
@@ -25,6 +33,9 @@ const colorPresets = [
 
 export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSidebarProps) {
   const [activeTab, setActiveTab] = useState('properties')
+  const [draggedElement, setDraggedElement] = useState<string | null>(null)
+  const [dragOverElement, setDragOverElement] = useState<string | null>(null)
+  const [dragPosition, setDragPosition] = useState<'above' | 'below' | null>(null)
   
   const {
     elements,
@@ -40,10 +51,23 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     setOpacity,
     setFontSize,
     createStage,
+    combineShapesIntoStage,
     lockGroup,
     unlockGroup,
     isElementLocked,
-    getElementGroup
+    getElementGroup,
+    alignElementsLeft,
+    alignElementsCenter,
+    alignElementsRight,
+    alignElementsTop,
+    alignElementsMiddle,
+    alignElementsBottom,
+    distributeElementsHorizontally,
+    distributeElementsVertically,
+    groupElements,
+    ungroupElements,
+    reorderElements,
+    selectElements
   } = useEditorStore()
 
   // Get selected element (if only one is selected)
@@ -126,6 +150,17 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     })
   }
 
+  const handleStrokeDashChange = (dashArray: string) => {
+    selectedElements.forEach(id => {
+      const element = elements.find(el => el.id === id)
+      if (element && (element.type === 'line' || element.type === 'arrow')) {
+        onUpdateElement(id, { strokeDasharray: dashArray })
+      }
+    })
+  }
+
+
+
   const handlePositionChange = (property: 'x' | 'y', value: string) => {
     const numValue = parseFloat(value)
     if (isNaN(numValue)) return
@@ -142,6 +177,54 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     selectedElements.forEach(id => {
       onUpdateElement(id, { [property]: numValue })
     })
+  }
+
+  // Drag and Drop handlers
+  const handleDragStart = (e: React.DragEvent, elementId: string) => {
+    setDraggedElement(elementId)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e: React.DragEvent, elementId: string) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    
+    if (draggedElement === elementId) return
+    
+    const rect = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - rect.top
+    const height = rect.height
+    
+    const position = y < height / 2 ? 'above' : 'below'
+    
+    setDragOverElement(elementId)
+    setDragPosition(position)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're leaving the entire element, not just moving to a child
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setDragOverElement(null)
+      setDragPosition(null)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent, targetElementId: string) => {
+    e.preventDefault()
+    
+    if (draggedElement && draggedElement !== targetElementId && dragPosition) {
+      reorderElements(draggedElement, targetElementId, dragPosition)
+    }
+    
+    setDraggedElement(null)
+    setDragOverElement(null)
+    setDragPosition(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedElement(null)
+    setDragOverElement(null)
+    setDragPosition(null)
   }
 
   const ColorPicker = ({ 
@@ -187,7 +270,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   return (
     <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="properties" className="flex items-center justify-center">
             <Settings className="h-4 w-4" />
           </TabsTrigger>
@@ -199,6 +282,15 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
           </TabsTrigger>
           <TabsTrigger value="actors" className="flex items-center justify-center">
             <Users className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger value="objects" className="flex items-center justify-center">
+            <Box className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger value="deixa" className="flex items-center justify-center">
+            <MessageSquare className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger value="tools" className="flex items-center justify-center">
+            <MoreHorizontal className="h-4 w-4" />
           </TabsTrigger>
         </TabsList>
 
@@ -291,38 +383,6 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             placeholder="Nome do ator..."
                           />
                         </div>
-                        
-                        <div>
-                          <Label className="text-xs">Papel</Label>
-                          <Input
-                            value={selectedElement.actorRole || ''}
-                            onChange={(e) => handleActorPropertyChange('actorRole', e.target.value)}
-                            className="h-8"
-                            placeholder="Papel do ator..."
-                          />
-                        </div>
-                        
-                        <div>
-                          <Label className="text-xs">Fala</Label>
-                          <Input
-                            value={selectedElement.actorSpeech || ''}
-                            onChange={(e) => handleActorPropertyChange('actorSpeech', e.target.value)}
-                            className="h-8"
-                            placeholder="Fala do ator..."
-                          />
-                        </div>
-                        
-                        <div>
-                          <Label className="text-xs">Forma</Label>
-                          <select
-                            value={selectedElement.actorShape || 'circle'}
-                            onChange={(e) => handleActorPropertyChange('actorShape', e.target.value)}
-                            className="w-full h-8 px-3 rounded-md border border-input bg-background text-sm"
-                          >
-                            <option value="circle">Círculo</option>
-                            <option value="square">Quadrado</option>
-                          </select>
-                        </div>
                       </div>
                     )}
 
@@ -366,6 +426,179 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                         className="w-full"
                       />
                     </div>
+
+                    {/* Stroke Dash Array - Only for lines and arrows */}
+                    {selectedElement && (selectedElement.type === 'line' || selectedElement.type === 'arrow') && (
+                      <div>
+                        <Label className="text-xs mb-2 block">Tipo de Tracejado</Label>
+                        <div className="grid grid-cols-3 gap-1">
+                          <Button
+                            variant={!selectedElement.strokeDasharray || selectedElement.strokeDasharray === '' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handleStrokeDashChange('')}
+                            className="h-8 text-xs"
+                            title="Linha sólida"
+                          >
+                            ___
+                          </Button>
+                          <Button
+                            variant={selectedElement.strokeDasharray === '8,4' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handleStrokeDashChange('8,4')}
+                            className="h-8 text-xs"
+                            title="Linha tracejada"
+                          >
+                            - - -
+                          </Button>
+                          <Button
+                            variant={selectedElement.strokeDasharray === '1,3' ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handleStrokeDashChange('1,3')}
+                            className="h-8 text-xs"
+                            title="Linha pontilhada"
+                          >
+                            ···
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Alignment and Grouping - Only show when multiple elements are selected */}
+                    {selectedElements.length > 1 && (
+                      <>
+                        <Separator />
+                        <div className="space-y-3">
+                          <Label className="text-xs font-medium">Alinhamento</Label>
+                          
+                          {/* Horizontal Alignment */}
+                          <div className="space-y-2">
+                            <Label className="text-xs text-gray-600">Horizontal</Label>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => alignElementsLeft(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Alinhar à esquerda"
+                              >
+                                <AlignLeft className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => alignElementsCenter(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Alinhar ao centro"
+                              >
+                                <AlignCenter className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => alignElementsRight(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Alinhar à direita"
+                              >
+                                <AlignRight className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Vertical Alignment */}
+                          <div className="space-y-2">
+                            <Label className="text-xs text-gray-600">Vertical</Label>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => alignElementsTop(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Alinhar ao topo"
+                              >
+                                <AlignVerticalJustifyStart className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => alignElementsMiddle(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Alinhar ao meio"
+                              >
+                                <AlignVerticalJustifyCenter className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => alignElementsBottom(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Alinhar à base"
+                              >
+                                <AlignVerticalJustifyEnd className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Distribution */}
+                          <div className="space-y-2">
+                            <Label className="text-xs text-gray-600">Distribuição</Label>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => distributeElementsHorizontally(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Distribuir horizontalmente"
+                              >
+                                <AlignHorizontalDistributeCenter className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => distributeElementsVertically(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Distribuir verticalmente"
+                              >
+                                <AlignVerticalDistributeCenter className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Grouping */}
+                          <div className="space-y-2">
+                            <Label className="text-xs text-gray-600">Agrupamento</Label>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => groupElements(selectedElements)}
+                                className="h-8 w-8 p-0"
+                                title="Agrupar elementos"
+                              >
+                                <Group className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  // Find groups that contain selected elements and ungroup them
+                                  const groupsToUngroup = groups.filter(group =>
+                                    group.elementIds.some(elementId => selectedElements.includes(elementId))
+                                  )
+                                  groupsToUngroup.forEach(group => ungroupElements(group.id))
+                                }}
+                                disabled={!groups.some(group => 
+                                  group.elementIds.some(elementId => selectedElements.includes(elementId))
+                                )}
+                                className="h-8 w-8 p-0"
+                                title="Desagrupar elementos"
+                              >
+                                <Ungroup className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -514,71 +747,98 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                         const elementGroup = getElementGroup(element.id)
                         const zIndex = element.zIndex || 0
                         
+                        const isDragging = draggedElement === element.id
+                        const isDragOver = dragOverElement === element.id
+                        const showDropIndicator = isDragOver && dragPosition
+                        
                         return (
-                          <div
-                            key={element.id}
-                            className={`p-2 rounded border transition-colors ${
-                              isLocked 
-                                ? 'bg-red-50 border-red-200 cursor-not-allowed opacity-75'
-                                : isSelected 
-                                  ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 cursor-pointer' 
-                                  : 'bg-gray-50 border-gray-200 hover:bg-gray-100 cursor-pointer'
-                            }`}
-                            onClick={() => {
-                              if (!isLocked) {
-                                const { selectElements } = useEditorStore.getState()
-                                selectElements([element.id])
-                              }
-                            }}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1">
-                                  <div 
-                                    className="w-3 h-3 rounded border flex-shrink-0"
-                                    style={{ backgroundColor: element.fillColor !== 'transparent' ? element.fillColor : element.strokeColor }}
-                                  />
-                                  {isLocked && (
-                                    <Lock className="h-3 w-3 text-red-500" />
+                          <div key={element.id} className="relative">
+                            {/* Drop indicator above */}
+                            {showDropIndicator && dragPosition === 'above' && (
+                              <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 z-10 rounded" />
+                            )}
+                            
+                            <div
+                              draggable={!isLocked}
+                              onDragStart={(e) => !isLocked && handleDragStart(e, element.id)}
+                              onDragOver={(e) => handleDragOver(e, element.id)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, element.id)}
+                              onDragEnd={handleDragEnd}
+                              className={`p-2 rounded border transition-all duration-200 ${
+                                isDragging 
+                                  ? 'opacity-50 scale-95 rotate-1 shadow-lg'
+                                  : isLocked 
+                                    ? 'bg-red-50 border-red-200 cursor-not-allowed opacity-75'
+                                    : isSelected 
+                                      ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 cursor-pointer' 
+                                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100 cursor-pointer'
+                              } ${isDragOver ? 'ring-2 ring-blue-400' : ''}`}
+                              onClick={() => {
+                                if (!isLocked && !isDragging) {
+                                  selectElements([element.id])
+                                }
+                              }}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {/* Drag handle */}
+                                  {!isLocked && (
+                                    <GripVertical className="h-3 w-3 text-gray-400 cursor-grab active:cursor-grabbing" />
                                   )}
+                                  
+                                  <div className="flex items-center gap-1">
+                                    <div 
+                                      className="w-3 h-3 rounded border flex-shrink-0"
+                                      style={{ backgroundColor: element.fillColor !== 'transparent' ? element.fillColor : element.strokeColor }}
+                                    />
+                                    {isLocked && (
+                                      <Lock className="h-3 w-3 text-red-500" />
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col min-w-0">
+                                    <span className={`text-xs font-medium capitalize truncate ${
+                                      isLocked ? 'text-red-600' : ''
+                                    }`}>
+                                      {element.type === 'path' ? 'Desenho' : 
+                                       element.type === 'actor' ? 'Ator' : element.type}
+                                      {element.type === 'text' && element.text ? ` - ${element.text.slice(0, 8)}...` : ''}
+                                      {element.type === 'actor' && element.actorName ? ` - ${element.actorName.slice(0, 8)}...` : ''}
+                                    </span>
+                                    {elementGroup && (
+                                      <span className="text-xs text-purple-600 font-medium">
+                                        {elementGroup.name || 'Grupo'}
+                                      </span>
+                                    )}
+                                    {isSelected && (
+                                      <span className="text-xs text-blue-600 font-medium">
+                                        Camada {zIndex}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex flex-col min-w-0">
-                                  <span className={`text-xs font-medium capitalize truncate ${
-                                    isLocked ? 'text-red-600' : ''
-                                  }`}>
-                                    {element.type === 'path' ? 'Desenho' : 
-                                     element.type === 'actor' ? 'Ator' : element.type}
-                                    {element.type === 'text' && element.text ? ` - ${element.text.slice(0, 8)}...` : ''}
-                                    {element.type === 'actor' && element.actorName ? ` - ${element.actorName.slice(0, 8)}...` : ''}
+                                <div className="flex flex-col items-end">
+                                  <span className="text-xs text-gray-400 font-mono">
+                                    z:{zIndex}
                                   </span>
-                                  {elementGroup && (
-                                    <span className="text-xs text-purple-600 font-medium">
-                                      {elementGroup.name || 'Grupo'}
+                                  {index === 0 && (
+                                    <span className="text-xs text-green-600 font-medium">
+                                      Topo
                                     </span>
                                   )}
-                                  {isSelected && (
-                                    <span className="text-xs text-blue-600 font-medium">
-                                      Camada {zIndex}
+                                  {index === elements.length - 1 && (
+                                    <span className="text-xs text-red-600 font-medium">
+                                      Base
                                     </span>
                                   )}
                                 </div>
-                              </div>
-                              <div className="flex flex-col items-end">
-                                <span className="text-xs text-gray-400 font-mono">
-                                  z:{zIndex}
-                                </span>
-                                {index === 0 && (
-                                  <span className="text-xs text-green-600 font-medium">
-                                    Topo
-                                  </span>
-                                )}
-                                {index === elements.length - 1 && (
-                                  <span className="text-xs text-red-600 font-medium">
-                                    Base
-                                  </span>
-                                )}
                               </div>
                             </div>
+                            
+                            {/* Drop indicator below */}
+                            {showDropIndicator && dragPosition === 'below' && (
+                              <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 z-10 rounded" />
+                            )}
                           </div>
                         )
                       })
@@ -588,8 +848,20 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
             </Card>
           </TabsContent>
 
-          <TabsContent value="actors" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <TabsContent value="actors" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
             <ActorsTab />
+          </TabsContent>
+
+          <TabsContent value="objects" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+            <ObjectsTab />
+          </TabsContent>
+
+          <TabsContent value="deixa" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+            <DeixaTab />
+          </TabsContent>
+
+          <TabsContent value="tools" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+            <ToolsTab />
           </TabsContent>
         </div>
       </Tabs>

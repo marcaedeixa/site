@@ -1,0 +1,412 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Element } from '@/hooks/useEditorStore'
+import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth.tsx'
+import { useParams } from 'next/navigation'
+
+interface ObjectModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSave: (objectData: Partial<Element>) => void
+  position: { x: number; y: number }
+  currentObjectCount: number
+}
+
+// Cores disponíveis para objetos
+const OBJECT_COLORS = [
+  { name: 'Azul', value: '#3b82f6' },
+  { name: 'Verde', value: '#10b981' },
+  { name: 'Vermelho', value: '#ef4444' },
+  { name: 'Amarelo', value: '#f59e0b' },
+  { name: 'Roxo', value: '#8b5cf6' },
+  { name: 'Rosa', value: '#ec4899' },
+  { name: 'Laranja', value: '#f97316' },
+  { name: 'Ciano', value: '#06b6d4' },
+  { name: 'Cinza', value: '#6b7280' },
+  { name: 'Marrom', value: '#92400e' }
+]
+
+// Formas disponíveis para objetos (excluindo círculo)
+const OBJECT_SHAPES = [
+  { name: 'Triângulo', value: 'triangle' },
+  { name: 'Quadrado', value: 'square' },
+  { name: 'Hexágono', value: 'hexagon' }
+]
+
+export function ObjectModal({ isOpen, onClose, onSave, position, currentObjectCount }: ObjectModalProps) {
+  const { user } = useAuth()
+  const params = useParams()
+  const projectId = params?.projectId as string
+  const supabase = createClient()
+
+  const [formData, setFormData] = useState({
+    objectName: '',
+    objectInitials: '',
+    objectNotes: '',
+    objectShape: 'square' as 'triangle' | 'square' | 'hexagon',
+    objectWidth: 80,
+    objectHeight: 80,
+    objectColor: '#3B82F6'
+  })
+
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
+
+  const generateInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join('')
+  }
+
+  const handleInputChange = (field: string, value: string | number) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+
+    // Auto-generate initials when name changes
+    if (field === 'objectName' && typeof value === 'string') {
+      setFormData(prev => ({
+        ...prev,
+        objectInitials: generateInitials(value)
+      }))
+    }
+
+    // Clear errors when user starts typing
+    if (errors[field]) {
+      setErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }))
+    }
+  }
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {}
+
+    if (!formData.objectName.trim()) {
+      newErrors.objectName = 'Nome é obrigatório'
+    }
+
+    if (!formData.objectInitials.trim()) {
+      newErrors.objectInitials = 'Iniciais são obrigatórias'
+    }
+
+    if (formData.objectWidth < 20 || formData.objectWidth > 200) {
+      newErrors.objectWidth = 'Largura deve estar entre 20 e 200 pixels'
+    }
+
+    if (formData.objectHeight < 20 || formData.objectHeight > 200) {
+      newErrors.objectHeight = 'Altura deve estar entre 20 e 200 pixels'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSave = async () => {
+    if (!validateForm() || !user || !projectId) return
+
+    // Check object limit
+    if (currentObjectCount >= 50) {
+      setErrors({ objectName: 'Limite máximo de 50 objetos por projeto atingido' })
+      return
+    }
+
+    try {
+      setSaving(true)
+      
+      // Primeiro salvar no banco de dados
+      const objectDbData = {
+        project_id: projectId,
+        user_id: user.id,
+        name: formData.objectName.trim(),
+        initials: formData.objectInitials.trim(),
+        color: formData.objectColor,
+        notes: formData.objectNotes.trim() || null,
+        appearance_config: {
+          shape: formData.objectShape,
+          width: formData.objectWidth,
+          height: formData.objectHeight,
+          strokeDasharray: '5,5'
+        },
+        position_x: position.x - formData.objectWidth / 2,
+        position_y: position.y - formData.objectHeight / 2
+      }
+      
+      const { data: insertedData, error: dbError } = await supabase
+        .from('objects')
+        .insert(objectDbData as any)
+        .select()
+      
+      if (dbError) {
+        console.error('Erro ao salvar objeto no banco:', dbError)
+        setErrors({ objectName: 'Erro ao salvar objeto. Tente novamente.' })
+        return
+      }
+      
+      // Disparar evento para atualizar lista de objetos
+      window.dispatchEvent(new CustomEvent('objectCreated', { detail: insertedData[0] }))
+      
+      // Depois criar elemento no canvas
+      const objectData: Partial<Element> = {
+        type: 'object',
+        x: position.x - formData.objectWidth / 2,
+        y: position.y - formData.objectHeight / 2,
+        width: formData.objectWidth,
+        height: formData.objectHeight,
+        objectName: formData.objectName.trim(),
+        objectInitials: formData.objectInitials.trim(),
+        objectNotes: formData.objectNotes.trim(),
+        objectShape: formData.objectShape,
+        strokeColor: formData.objectColor,
+        fillColor: 'transparent',
+        strokeWidth: 2,
+        strokeDasharray: '5,5', // Contorno tracejado obrigatório
+        opacity: 1
+      }
+
+      onSave(objectData)
+      onClose()
+
+      // Reset form
+      setFormData({
+        objectName: '',
+        objectInitials: '',
+        objectNotes: '',
+        objectShape: 'square',
+        objectWidth: 80,
+        objectHeight: 80,
+        objectColor: '#3B82F6'
+      })
+      setErrors({})
+    } catch (error) {
+      console.error('Erro ao criar objeto:', error)
+      setErrors({ objectName: 'Erro inesperado. Tente novamente.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCancel = () => {
+    setFormData({
+      objectName: '',
+      objectInitials: '',
+      objectNotes: '',
+      objectShape: 'square',
+        objectColor: '#3b82f6',
+        objectWidth: 80,
+        objectHeight: 80
+    })
+    onClose()
+  }
+
+  // Função para renderizar a prévia do objeto
+  const renderObjectPreview = () => {
+    const { objectShape, objectColor, objectWidth, objectHeight, objectInitials } = formData
+    
+    const svgProps = {
+      width: 60,
+      height: 60,
+      viewBox: `0 0 ${objectWidth} ${objectHeight}`,
+      className: "border border-gray-200 rounded"
+    }
+
+    const shapeProps = {
+      fill: 'transparent',
+      stroke: objectColor,
+      strokeWidth: 2,
+      strokeDasharray: '5,5' // Contorno tracejado
+    }
+
+    let shapeElement
+    const centerX = objectWidth / 2
+    const centerY = objectHeight / 2
+
+    switch (objectShape) {
+      case 'triangle':
+        const trianglePoints = `${centerX},${objectHeight * 0.1} ${objectWidth * 0.1},${objectHeight * 0.9} ${objectWidth * 0.9},${objectHeight * 0.9}`
+        shapeElement = <polygon points={trianglePoints} {...shapeProps} />
+        break
+      case 'square':
+        const squareSize = Math.min(objectWidth, objectHeight) * 0.8
+        const squareX = (objectWidth - squareSize) / 2
+        const squareY = (objectHeight - squareSize) / 2
+        shapeElement = <rect x={squareX} y={squareY} width={squareSize} height={squareSize} {...shapeProps} />
+        break
+      case 'hexagon':
+        const hexRadius = Math.min(objectWidth, objectHeight) * 0.4
+        const hexPoints = Array.from({ length: 6 }, (_, i) => {
+          const angle = (i * Math.PI) / 3
+          const x = centerX + hexRadius * Math.cos(angle)
+          const y = centerY + hexRadius * Math.sin(angle)
+          return `${x},${y}`
+        }).join(' ')
+        shapeElement = <polygon points={hexPoints} {...shapeProps} />
+        break
+      default:
+        shapeElement = <rect x={10} y={10} width={objectWidth-20} height={objectHeight-20} {...shapeProps} />
+    }
+
+    return (
+      <div className="flex flex-col items-center space-y-2">
+        <svg {...svgProps}>
+          {shapeElement}
+          {/* Texto com iniciais */}
+          <text
+            x={centerX}
+            y={centerY}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fontSize="14"
+            fontWeight="bold"
+            fill={objectColor}
+          >
+            {objectInitials}
+          </text>
+        </svg>
+        <span className="text-xs text-gray-500">Prévia do objeto</span>
+      </div>
+    )
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Cadastrar Novo Objeto</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          {/* Nome do objeto */}
+          <div className="space-y-2">
+            <Label htmlFor="objectName">Nome do Objeto *</Label>
+            <Input
+              id="objectName"
+              placeholder="Digite o nome do objeto"
+              value={formData.objectName}
+              onChange={(e) => handleInputChange('objectName', e.target.value)}
+            />
+          </div>
+
+          {/* Iniciais */}
+          <div className="space-y-2">
+            <Label htmlFor="objectInitials">Iniciais/Sigla</Label>
+            <Input
+              id="objectInitials"
+              placeholder="Ex: OBJ"
+              maxLength={3}
+              value={formData.objectInitials}
+              onChange={(e) => handleInputChange('objectInitials', e.target.value.toUpperCase())}
+            />
+          </div>
+
+          {/* Notas */}
+          <div className="space-y-2">
+            <Label htmlFor="objectNotes">Notas (opcional)</Label>
+            <Textarea
+              id="objectNotes"
+              placeholder="Descrição ou notas sobre o objeto"
+              value={formData.objectNotes}
+              onChange={(e) => handleInputChange('objectNotes', e.target.value)}
+              rows={2}
+            />
+          </div>
+
+          {/* Forma */}
+          <div className="space-y-2">
+            <Label htmlFor="objectShape">Forma</Label>
+            <Select
+              value={formData.objectShape}
+              onValueChange={(value) => handleInputChange('objectShape', value)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OBJECT_SHAPES.map((shape) => (
+                  <SelectItem key={shape.value} value={shape.value}>
+                    {shape.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Dimensões */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="width">Largura (px)</Label>
+              <Input
+                id="width"
+                type="number"
+                min="20"
+                max="200"
+                value={formData.objectWidth}
+                onChange={(e) => handleInputChange('objectWidth', parseInt(e.target.value) || 80)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="height">Altura (px)</Label>
+              <Input
+                id="height"
+                type="number"
+                min="20"
+                max="200"
+                value={formData.objectHeight}
+                onChange={(e) => handleInputChange('objectHeight', parseInt(e.target.value) || 80)}
+              />
+            </div>
+          </div>
+
+          {/* Cor */}
+          <div className="space-y-2">
+            <Label>Cor</Label>
+            <div className="flex flex-wrap gap-2">
+              {OBJECT_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  className={`w-8 h-8 rounded border-2 transition-all ${
+                    formData.objectColor === color.value
+                      ? 'border-gray-800 scale-110'
+                      : 'border-gray-300 hover:border-gray-500'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  onClick={() => handleInputChange('objectColor', color.value)}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Prévia */}
+          {formData.objectName && (
+            <div className="border-t pt-4">
+              {renderObjectPreview()}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={handleCancel}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSave} disabled={!formData.objectName.trim() || saving}>
+            {saving ? 'Criando...' : 'Criar Objeto'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
