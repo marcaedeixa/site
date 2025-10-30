@@ -3,6 +3,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
 import { Element, Point, Tool, Viewport, useEditorStore } from '@/hooks/useEditorStore'
 import { ActorModal } from './ActorModal'
+import { FullscreenSlideshow } from './FullscreenSlideshow'
+
 import { createUnifiedStageSync, extractPathData } from '@/lib/svgUtils'
 
 interface EditorCanvasProps {
@@ -58,9 +60,17 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [tooltip, setTooltip] = useState<{ x: number, y: number, text: string } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  
+  // Guide lines state
+  const [guideLines, setGuideLines] = useState<{
+    vertical: number[]
+    horizontal: number[]
+  }>({ vertical: [], horizontal: [] })
+  
+
 
   // Get slideshow state from store
-  const { stageConfig, isPlayingSlideshow, isTransitioning } = useEditorStore()
+  const { stageConfig, isPlayingSlideshow } = useEditorStore()
 
   useImperativeHandle(ref, () => canvasRef.current!)
 
@@ -195,26 +205,65 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       
       case 'line':
       case 'arrow':
-        // Simple line hit detection with tolerance
-        const tolerance = 5
-        const lineLength = Math.sqrt(width ** 2 + height ** 2)
-        if (lineLength === 0) return false
+        // Enhanced line hit detection with support for curved lines
+        const tolerance = 8 // Increased tolerance for better usability
+        const startX = x
+        const startY = y
+        const endX = x + width
+        const endY = y + height
         
-        const t = Math.max(0, Math.min(1, 
-          ((point.x - x) * width + (point.y - y) * height) / (lineLength ** 2)
-        ))
+        // Check if line has curve
+        const hasCurve = element.curveOffsetX !== undefined && element.curveOffsetY !== undefined
         
-        const closestX = x + t * width
-        const closestY = y + t * height
-        const lineDistance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2)
-        
-        return lineDistance <= tolerance
+        if (hasCurve) {
+          // For curved lines, use quadratic bezier curve hit detection
+          const midX = (startX + endX) / 2
+          const midY = (startY + endY) / 2
+          const controlX = midX + element.curveOffsetX!
+          const controlY = midY + element.curveOffsetY!
+          
+          // Sample points along the bezier curve and find closest distance
+          let minDistance = Infinity
+          const samples = 20 // Number of sample points along the curve
+          
+          for (let i = 0; i <= samples; i++) {
+            const t = i / samples
+            const invT = 1 - t
+            
+            // Quadratic bezier formula: B(t) = (1-t)²P₀ + 2(1-t)tP₁ + t²P₂
+            const curveX = invT * invT * startX + 2 * invT * t * controlX + t * t * endX
+            const curveY = invT * invT * startY + 2 * invT * t * controlY + t * t * endY
+            
+            const distance = Math.sqrt((point.x - curveX) ** 2 + (point.y - curveY) ** 2)
+            minDistance = Math.min(minDistance, distance)
+          }
+          
+          return minDistance <= tolerance
+        } else {
+          // For straight lines, use original logic but with improved tolerance
+          const lineLength = Math.sqrt(width ** 2 + height ** 2)
+          if (lineLength === 0) return false
+          
+          const t = Math.max(0, Math.min(1, 
+            ((point.x - startX) * width + (point.y - startY) * height) / (lineLength ** 2)
+          ))
+          
+          const closestX = startX + t * width
+          const closestY = startY + t * height
+          const lineDistance = Math.sqrt((point.x - closestX) ** 2 + (point.y - closestY) ** 2)
+          
+          return lineDistance <= tolerance
+        }
       
       case 'text':
         // Approximate text bounds
         const textWidth = (element.text?.length || 0) * (element.fontSize || 16) * 0.6
         const textHeight = element.fontSize || 16
         return point.x >= x && point.x <= x + textWidth && point.y >= y - textHeight && point.y <= y
+      
+      case 'textbox':
+        // Textbox uses defined width and height
+        return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
       
       case 'path':
         if (element.pathData) {
@@ -281,6 +330,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         // Stage hit detection - treat as rectangle
         return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
       
+      case 'object':
+        // Object hit detection using bounding box (same as square actors)
+        return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
+      
       default:
         return false
     }
@@ -320,7 +373,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const handleSize = 8 / viewport.zoom
     const handles: { id: string, x: number, y: number, cursor: string }[] = []
 
-    if (type === 'rectangle' || type === 'text' || type === 'actor') {
+    if (type === 'rectangle' || type === 'text' || type === 'actor' || type === 'object') {
       // Corner handles
       handles.push(
         { id: 'nw', x: x - handleSize/2, y: y - handleSize/2, cursor: 'nw-resize' },
@@ -487,6 +540,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     switch (type) {
       case 'rectangle':
       case 'text':
+      case 'textbox':
         return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
       
       case 'circle':
@@ -496,6 +550,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         const centerY = y + radius
         return centerX - radius >= minX && centerY - radius >= minY && 
                centerX + radius <= maxX && centerY + radius <= maxY
+      
+      case 'object':
+        // Objects can have different shapes, but for selection we use their bounding box
+        return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
       
       case 'line':
       case 'arrow':
@@ -517,6 +575,67 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         return false
     }
   }, [])
+
+  // Detect alignment guides between elements
+  const detectAlignmentGuides = useCallback((draggedElementIds: string[], currentPositions: { [id: string]: { x: number, y: number } }) => {
+    const SNAP_THRESHOLD = 10 // pixels
+    const guides: { vertical: number[], horizontal: number[] } = { vertical: [], horizontal: [] }
+    
+    // Get all non-dragged elements as reference points
+    const referenceElements = elements.filter(el => !draggedElementIds.includes(el.id))
+    
+    // Get dragged elements with their current positions
+    const draggedElements = elements.filter(el => draggedElementIds.includes(el.id))
+    
+    draggedElements.forEach(draggedEl => {
+      const currentPos = currentPositions[draggedEl.id] || { x: draggedEl.x, y: draggedEl.y }
+      const draggedCenterX = currentPos.x + (draggedEl.width || 0) / 2
+      const draggedCenterY = currentPos.y + (draggedEl.height || 0) / 2
+      const draggedRight = currentPos.x + (draggedEl.width || 0)
+      const draggedBottom = currentPos.y + (draggedEl.height || 0)
+      
+      referenceElements.forEach(refEl => {
+        const refCenterX = refEl.x + (refEl.width || 0) / 2
+        const refCenterY = refEl.y + (refEl.height || 0) / 2
+        const refRight = refEl.x + (refEl.width || 0)
+        const refBottom = refEl.y + (refEl.height || 0)
+        
+        // Vertical alignment checks
+        // Left edges
+        if (Math.abs(currentPos.x - refEl.x) <= SNAP_THRESHOLD) {
+          guides.vertical.push(refEl.x)
+        }
+        // Centers
+        if (Math.abs(draggedCenterX - refCenterX) <= SNAP_THRESHOLD) {
+          guides.vertical.push(refCenterX)
+        }
+        // Right edges
+        if (Math.abs(draggedRight - refRight) <= SNAP_THRESHOLD) {
+          guides.vertical.push(refRight)
+        }
+        
+        // Horizontal alignment checks
+        // Top edges
+        if (Math.abs(currentPos.y - refEl.y) <= SNAP_THRESHOLD) {
+          guides.horizontal.push(refEl.y)
+        }
+        // Centers
+        if (Math.abs(draggedCenterY - refCenterY) <= SNAP_THRESHOLD) {
+          guides.horizontal.push(refCenterY)
+        }
+        // Bottom edges
+        if (Math.abs(draggedBottom - refBottom) <= SNAP_THRESHOLD) {
+          guides.horizontal.push(refBottom)
+        }
+      })
+    })
+    
+    // Remove duplicates and sort
+    guides.vertical = [...new Set(guides.vertical)].sort((a, b) => a - b)
+    guides.horizontal = [...new Set(guides.horizontal)].sort((a, b) => a - b)
+    
+    return guides
+  }, [elements])
 
   // Get elements within selection rectangle (optimized with memoization)
   const getElementsInSelection = useCallback((start: Point, end: Point): string[] => {
@@ -653,16 +772,46 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
 
-    // Handle drawing tools (skip eraser)
+    // Handle eraser tool
     if (selectedTool === 'eraser') {
-      // Eraser logic would go here
-      return
-    }
-    
-    // Handle actor tool - show modal for actor creation
-    if (selectedTool === 'actor') {
-      setActorModalPosition(canvasPoint)
-      setShowActorModal(true)
+      // Find elements under the cursor
+      const elementsUnderCursor = elements.filter(element => {
+        if (element.locked) return false
+        
+        // Check if point is inside element bounds
+        const elementBounds = {
+          x: element.x,
+          y: element.y,
+          width: element.width || 0,
+          height: element.height || 0
+        }
+        
+        // For path elements (pen tool), check if point is near the path
+        if (element.type === 'path' && element.points) {
+          const tolerance = 10 // pixels
+          return element.points.some(point => {
+            const distance = Math.sqrt(
+              Math.pow(canvasPoint.x - point.x, 2) + 
+              Math.pow(canvasPoint.y - point.y, 2)
+            )
+            return distance <= tolerance
+          })
+        }
+        
+        // For other elements, check if point is inside bounds
+        return canvasPoint.x >= elementBounds.x &&
+               canvasPoint.x <= elementBounds.x + elementBounds.width &&
+               canvasPoint.y >= elementBounds.y &&
+               canvasPoint.y <= elementBounds.y + elementBounds.height
+      })
+      
+      // Delete elements under cursor
+      if (elementsUnderCursor.length > 0) {
+        const { deleteElements } = useEditorStore.getState()
+        deleteElements(elementsUnderCursor.map(el => el.id))
+      }
+      
+      setIsDrawing(true) // Allow continuous erasing while dragging
       return
     }
     
@@ -832,23 +981,60 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           newBounds.height = snapToSize(newBounds.height)
         }
         
-        // Maintain aspect ratio with Shift key
-        if (isShiftPressed && (resizeHandle === 'nw' || resizeHandle === 'ne' || resizeHandle === 'sw' || resizeHandle === 'se')) {
-          const aspectRatio = resizeStartBounds.width / resizeStartBounds.height
-          if (newBounds.width / newBounds.height > aspectRatio) {
-            newBounds.width = newBounds.height * aspectRatio
+        // Maintain aspect ratio for circular actors (always), objects (always), and other elements with Shift key
+        const shouldMaintainAspectRatio = (element.type === 'actor' && element.actorShape === 'circle') || 
+                                         element.type === 'object' ||
+                                         (isShiftPressed && (resizeHandle === 'nw' || resizeHandle === 'ne' || resizeHandle === 'sw' || resizeHandle === 'se'))
+        
+        if (shouldMaintainAspectRatio) {
+          if (element.type === 'actor' && element.actorShape === 'circle') {
+            // For circular actors, always maintain 1:1 aspect ratio (perfect circle)
+            const size = Math.max(newBounds.width, newBounds.height)
+            newBounds.width = size
+            newBounds.height = size
+            
+            // Adjust position for corner handles to maintain circle center
+            if (resizeHandle === 'nw') {
+              newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+              newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+            } else if (resizeHandle === 'ne') {
+              newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+            } else if (resizeHandle === 'sw') {
+              newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+            }
+          } else if (element.type === 'object') {
+            // For objects, always maintain 1:1 aspect ratio (square proportions)
+            const size = Math.max(newBounds.width, newBounds.height)
+            newBounds.width = size
+            newBounds.height = size
+            
+            // Adjust position for corner handles to maintain object center
+            if (resizeHandle === 'nw') {
+              newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+              newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+            } else if (resizeHandle === 'ne') {
+              newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+            } else if (resizeHandle === 'sw') {
+              newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+            }
           } else {
-            newBounds.height = newBounds.width / aspectRatio
-          }
-          
-          // Adjust position for corner handles
-          if (resizeHandle === 'nw') {
-            newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
-            newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
-          } else if (resizeHandle === 'ne') {
-            newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
-          } else if (resizeHandle === 'sw') {
-            newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+            // For other elements with Shift key, maintain original aspect ratio
+            const aspectRatio = resizeStartBounds.width / resizeStartBounds.height
+            if (newBounds.width / newBounds.height > aspectRatio) {
+              newBounds.width = newBounds.height * aspectRatio
+            } else {
+              newBounds.height = newBounds.width / aspectRatio
+            }
+            
+            // Adjust position for corner handles
+            if (resizeHandle === 'nw') {
+              newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+              newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+            } else if (resizeHandle === 'ne') {
+              newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+            } else if (resizeHandle === 'sw') {
+              newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+            }
           }
         }
         
@@ -915,7 +1101,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         const deltaX = newX - firstElement.x
         const deltaY = newY - firstElement.y
         
-        // Move all unlocked dragged elements by the same delta to maintain relative positions
+        // Calculate new positions for all dragged elements
+        const newPositions: { [id: string]: { x: number, y: number } } = {}
         unlocked.forEach(elementId => {
           const element = elements.find(el => el.id === elementId)
           if (element) {
@@ -927,6 +1114,76 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
               newX = snapToGrid(newX)
               newY = snapToGrid(newY)
             }
+            
+            newPositions[elementId] = { x: newX, y: newY }
+          }
+        })
+        
+        // Detect alignment guides
+        const guides = detectAlignmentGuides(unlocked, newPositions)
+        setGuideLines(guides)
+        
+        // Apply snap to alignment guides
+        const SNAP_THRESHOLD = 10
+        unlocked.forEach(elementId => {
+          const element = elements.find(el => el.id === elementId)
+          if (element) {
+            let { x: newX, y: newY } = newPositions[elementId]
+            
+            // Snap to vertical guides
+            const elementCenterX = newX + (element.width || 0) / 2
+            const elementRight = newX + (element.width || 0)
+            
+            for (const guideX of guides.vertical) {
+              // Snap left edge
+              if (Math.abs(newX - guideX) <= SNAP_THRESHOLD) {
+                newX = guideX
+                break
+              }
+              // Snap center
+              if (Math.abs(elementCenterX - guideX) <= SNAP_THRESHOLD) {
+                newX = guideX - (element.width || 0) / 2
+                break
+              }
+              // Snap right edge
+              if (Math.abs(elementRight - guideX) <= SNAP_THRESHOLD) {
+                newX = guideX - (element.width || 0)
+                break
+              }
+            }
+            
+            // Snap to horizontal guides
+            const elementCenterY = newY + (element.height || 0) / 2
+            const elementBottom = newY + (element.height || 0)
+            
+            for (const guideY of guides.horizontal) {
+              // Snap top edge
+              if (Math.abs(newY - guideY) <= SNAP_THRESHOLD) {
+                newY = guideY
+                break
+              }
+              // Snap center
+              if (Math.abs(elementCenterY - guideY) <= SNAP_THRESHOLD) {
+                newY = guideY - (element.height || 0) / 2
+                break
+              }
+              // Snap bottom edge
+              if (Math.abs(elementBottom - guideY) <= SNAP_THRESHOLD) {
+                newY = guideY - (element.height || 0)
+                break
+              }
+            }
+            
+            // Update the position
+            newPositions[elementId] = { x: newX, y: newY }
+          }
+        })
+        
+        // Move all unlocked dragged elements by the same delta to maintain relative positions
+        unlocked.forEach(elementId => {
+          const element = elements.find(el => el.id === elementId)
+          if (element) {
+            const { x: newX, y: newY } = newPositions[elementId]
             
             // For stage elements, also move the circle properties
             if (element.type === 'stage' && element.circleX !== undefined && element.circleY !== undefined) {
@@ -953,6 +1210,47 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             }
           }
         })
+      }
+      return
+    }
+
+    // Handle eraser tool during drag
+    if (isDrawing && selectedTool === 'eraser') {
+      // Find elements under the cursor
+      const elementsUnderCursor = elements.filter(element => {
+        if (element.locked) return false
+        
+        // Check if point is inside element bounds
+        const elementBounds = {
+          x: element.x,
+          y: element.y,
+          width: element.width || 0,
+          height: element.height || 0
+        }
+        
+        // For path elements (pen tool), check if point is near the path
+        if (element.type === 'path' && element.points) {
+          const tolerance = 10 // pixels
+          return element.points.some(point => {
+            const distance = Math.sqrt(
+              Math.pow(canvasPoint.x - point.x, 2) + 
+              Math.pow(canvasPoint.y - point.y, 2)
+            )
+            return distance <= tolerance
+          })
+        }
+        
+        // For other elements, check if point is inside bounds
+        return canvasPoint.x >= elementBounds.x &&
+               canvasPoint.x <= elementBounds.x + elementBounds.width &&
+               canvasPoint.y >= elementBounds.y &&
+               canvasPoint.y <= elementBounds.y + elementBounds.height
+      })
+      
+      // Delete elements under cursor
+      if (elementsUnderCursor.length > 0) {
+        const { deleteElements } = useEditorStore.getState()
+        deleteElements(elementsUnderCursor.map(el => el.id))
       }
       return
     }
@@ -1030,6 +1328,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     setLastPanPoint(null)
     setDraggedElements([])
     setDragOffset({ x: 0, y: 0 })
+    // Clear guide lines when dragging ends
+    setGuideLines({ vertical: [], horizontal: [] })
     // Apply resize changes and save to history when finishing resize
     if (isResizing && resizePreview && selectedElements.length === 1) {
       const elementId = selectedElements[0]
@@ -1206,8 +1506,35 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       ctx.setLineDash([])
     }
 
+    // Draw guide lines
+    if (guideLines.vertical.length > 0 || guideLines.horizontal.length > 0) {
+      ctx.save()
+      ctx.strokeStyle = '#ff6b6b'
+      ctx.lineWidth = 1 / viewport.zoom
+      ctx.setLineDash([8 / viewport.zoom, 4 / viewport.zoom])
+      ctx.globalAlpha = 0.8
+
+      // Draw vertical guide lines
+      guideLines.vertical.forEach(x => {
+        ctx.beginPath()
+        ctx.moveTo(x, -viewport.y / viewport.zoom)
+        ctx.lineTo(x, (-viewport.y + canvas.height) / viewport.zoom)
+        ctx.stroke()
+      })
+
+      // Draw horizontal guide lines
+      guideLines.horizontal.forEach(y => {
+        ctx.beginPath()
+        ctx.moveTo(-viewport.x / viewport.zoom, y)
+        ctx.lineTo((-viewport.x + canvas.width) / viewport.zoom, y)
+        ctx.stroke()
+      })
+
+      ctx.restore()
+    }
+
     ctx.restore()
-  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig])
+  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview])
 
   // Draw grid
   const drawGrid = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {
@@ -1288,6 +1615,55 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ctx.stroke()
         }
         break
+
+      case 'triangle':
+        // Draw triangle
+        ctx.beginPath()
+        ctx.moveTo(x + width / 2, y) // Top point
+        ctx.lineTo(x, y + height) // Bottom left
+        ctx.lineTo(x + width, y + height) // Bottom right
+        ctx.closePath()
+        if (element.fillColor !== 'transparent') {
+          ctx.fill()
+        }
+        ctx.stroke()
+        break
+
+      case 'square':
+        // Draw square (always square, not rectangle)
+        const squareSize = Math.min(width, height)
+        const squareX = x + (width - squareSize) / 2
+        const squareY = y + (height - squareSize) / 2
+        if (element.fillColor !== 'transparent') {
+          ctx.fillRect(squareX, squareY, squareSize, squareSize)
+        }
+        ctx.strokeRect(squareX, squareY, squareSize, squareSize)
+        break
+
+      case 'hexagon':
+        // Draw hexagon
+        const hexRadius = Math.min(width, height) / 2
+        const hexCenterX = x + width / 2
+        const hexCenterY = y + height / 2
+        
+        ctx.beginPath()
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * Math.PI) / 3
+          const pointX = hexCenterX + hexRadius * Math.cos(angle)
+          const pointY = hexCenterY + hexRadius * Math.sin(angle)
+          
+          if (i === 0) {
+            ctx.moveTo(pointX, pointY)
+          } else {
+            ctx.lineTo(pointX, pointY)
+          }
+        }
+        ctx.closePath()
+        if (element.fillColor !== 'transparent') {
+          ctx.fill()
+        }
+        ctx.stroke()
+        break
     }
 
     // Draw stage label if locked
@@ -1352,6 +1728,15 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         break
 
       case 'line':
+        // Apply stroke dash array if specified
+        if (element.strokeDasharray) {
+          const dashArray = element.strokeDasharray.split(',').map(Number)
+          ctx.setLineDash(dashArray.map(d => d / viewport.zoom))
+        }
+        
+        // Set line cap to round for rounded ends
+        ctx.lineCap = 'round'
+        
         ctx.beginPath()
         if (element.curveOffsetX !== undefined && element.curveOffsetY !== undefined) {
           // Draw curved line using quadratic curve
@@ -1365,9 +1750,24 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ctx.lineTo(x + width, y + height)
         }
         ctx.stroke()
+        
+        // Reset line dash and line cap
+        if (element.strokeDasharray) {
+          ctx.setLineDash([])
+        }
+        ctx.lineCap = 'butt'
         break
 
       case 'arrow':
+        // Apply stroke dash array if specified
+        if (element.strokeDasharray) {
+          const dashArray = element.strokeDasharray.split(',').map(Number)
+          ctx.setLineDash(dashArray.map(d => d / viewport.zoom))
+        }
+        
+        // Set line cap to round for rounded ends
+        ctx.lineCap = 'round'
+        
         // Draw line (curved or straight)
         ctx.beginPath()
         if (element.curveOffsetX !== undefined && element.curveOffsetY !== undefined) {
@@ -1410,12 +1810,104 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           y + height - arrowLength * Math.sin(angle + arrowAngle)
         )
         ctx.stroke()
+        
+        // Reset line dash and line cap
+        if (element.strokeDasharray) {
+          ctx.setLineDash([])
+        }
+        ctx.lineCap = 'butt'
         break
 
       case 'text':
         ctx.font = `${(element.fontSize || 16) / viewport.zoom}px Arial`
         ctx.fillStyle = element.strokeColor || '#000000'
         ctx.fillText(element.text || '', x, y)
+        break
+
+      case 'textbox':
+        // Draw textbox background
+        if (element.fillColor !== 'transparent') {
+          ctx.fillStyle = element.fillColor || '#ffffff'
+          ctx.fillRect(x, y, width, height)
+        }
+        
+        // Draw textbox border
+        ctx.strokeStyle = element.strokeColor || '#cccccc'
+        ctx.lineWidth = (element.strokeWidth || 1) / viewport.zoom
+        ctx.strokeRect(x, y, width, height)
+        
+        // Draw text content based on preview mode
+        if (element.text) {
+          ctx.save()
+          ctx.font = `${(element.fontSize || 14) / viewport.zoom}px Arial`
+          ctx.fillStyle = element.strokeColor || '#000000'
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'top'
+          
+          const padding = 8 / viewport.zoom
+          const textX = x + padding
+          const textY = y + padding
+          const textWidth = width - (padding * 2)
+          const textHeight = height - (padding * 2)
+          
+          let displayText = element.text
+          const previewMode = element.textBoxConfig?.previewMode || 'full'
+          
+          if (previewMode !== 'full') {
+            const maxChars = Math.floor(textWidth / ((element.fontSize || 14) * 0.6 / viewport.zoom))
+            
+            switch (previewMode) {
+              case 'start':
+                displayText = element.text.length > maxChars 
+                  ? element.text.substring(0, maxChars - 3) + '...'
+                  : element.text
+                break
+              case 'end':
+                displayText = element.text.length > maxChars 
+                  ? '...' + element.text.substring(element.text.length - (maxChars - 3))
+                  : element.text
+                break
+              case 'start-end':
+                if (element.text.length > maxChars) {
+                  const halfChars = Math.floor((maxChars - 3) / 2)
+                  displayText = element.text.substring(0, halfChars) + '...' + 
+                               element.text.substring(element.text.length - halfChars)
+                }
+                break
+            }
+          }
+          
+          // Simple text wrapping
+          const words = displayText.split(' ')
+          const lines = []
+          let currentLine = ''
+          
+          for (const word of words) {
+            const testLine = currentLine + (currentLine ? ' ' : '') + word
+            const testWidth = ctx.measureText(testLine).width
+            
+            if (testWidth > textWidth && currentLine) {
+              lines.push(currentLine)
+              currentLine = word
+            } else {
+              currentLine = testLine
+            }
+          }
+          
+          if (currentLine) {
+            lines.push(currentLine)
+          }
+          
+          // Draw lines
+          const lineHeight = (element.fontSize || 14) * 1.2 / viewport.zoom
+          lines.forEach((line, index) => {
+            if (textY + (index * lineHeight) < y + textHeight) {
+              ctx.fillText(line, textX, textY + (index * lineHeight))
+            }
+          })
+          
+          ctx.restore()
+        }
         break
 
       case 'path':
@@ -1610,6 +2102,120 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ctx.strokeRect(x, y, width, height)
         }
         break
+
+      case 'object':
+        // Draw object based on its shape
+        const objectShape = element.objectShape || 'square'
+        
+        switch (objectShape) {
+          case 'triangle':
+            ctx.beginPath()
+            ctx.moveTo(x + width / 2, y) // Top point
+            ctx.lineTo(x, y + height) // Bottom left
+            ctx.lineTo(x + width, y + height) // Bottom right
+            ctx.closePath()
+            
+            if (element.fillColor !== 'transparent') {
+              ctx.fill()
+            }
+            
+            // Apply stroke dash array if specified
+            if (element.strokeDasharray) {
+              const dashArray = element.strokeDasharray.split(',').map(Number)
+              ctx.setLineDash(dashArray.map(d => d / viewport.zoom))
+            }
+            ctx.stroke()
+            if (element.strokeDasharray) {
+              ctx.setLineDash([])
+            }
+            break
+            
+          case 'square':
+            const squareSize = Math.min(width, height)
+            const squareX = x + (width - squareSize) / 2
+            const squareY = y + (height - squareSize) / 2
+            
+            if (element.fillColor !== 'transparent') {
+              ctx.fillRect(squareX, squareY, squareSize, squareSize)
+            }
+            
+            // Apply stroke dash array if specified
+            if (element.strokeDasharray) {
+              const dashArray = element.strokeDasharray.split(',').map(Number)
+              ctx.setLineDash(dashArray.map(d => d / viewport.zoom))
+            }
+            ctx.strokeRect(squareX, squareY, squareSize, squareSize)
+            if (element.strokeDasharray) {
+              ctx.setLineDash([])
+            }
+            break
+            
+          case 'hexagon':
+            const hexRadius = Math.min(width, height) / 2
+            const hexCenterX = x + width / 2
+            const hexCenterY = y + height / 2
+            
+            ctx.beginPath()
+            for (let i = 0; i < 6; i++) {
+              const angle = (i * Math.PI) / 3
+              const pointX = hexCenterX + hexRadius * Math.cos(angle)
+              const pointY = hexCenterY + hexRadius * Math.sin(angle)
+              
+              if (i === 0) {
+                ctx.moveTo(pointX, pointY)
+              } else {
+                ctx.lineTo(pointX, pointY)
+              }
+            }
+            ctx.closePath()
+            
+            if (element.fillColor !== 'transparent') {
+              ctx.fill()
+            }
+            
+            // Apply stroke dash array if specified
+            if (element.strokeDasharray) {
+              const dashArray = element.strokeDasharray.split(',').map(Number)
+              ctx.setLineDash(dashArray.map(d => d / viewport.zoom))
+            }
+            ctx.stroke()
+            if (element.strokeDasharray) {
+              ctx.setLineDash([])
+            }
+            break
+            
+          default: // rectangle
+            if (element.fillColor !== 'transparent') {
+              ctx.fillRect(x, y, width, height)
+            }
+            
+            // Apply stroke dash array if specified
+            if (element.strokeDasharray) {
+              const dashArray = element.strokeDasharray.split(',').map(Number)
+              ctx.setLineDash(dashArray.map(d => d / viewport.zoom))
+            }
+            ctx.strokeRect(x, y, width, height)
+            if (element.strokeDasharray) {
+              ctx.setLineDash([])
+            }
+            break
+        }
+        
+        // Draw object initials if available
+        if (element.objectInitials) {
+          ctx.save()
+          ctx.fillStyle = element.strokeColor || '#000000'
+          ctx.font = `bold ${Math.min(width, height) * 0.3}px Arial`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(
+            element.objectInitials,
+            x + width / 2,
+            y + height / 2
+          )
+          ctx.restore()
+        }
+        break
     }
 
     // Draw group indicator
@@ -1623,6 +2229,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       switch (element.type) {
         case 'rectangle':
         case 'text':
+        case 'textbox':
         case 'stage':
           ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
           break
@@ -1642,6 +2249,47 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
           }
           break
+        case 'triangle':
+          // Draw triangle outline for group indicator
+          ctx.beginPath()
+          ctx.moveTo(x + width / 2, y - padding) // Top point
+          ctx.lineTo(x - padding, y + height + padding) // Bottom left
+          ctx.lineTo(x + width + padding, y + height + padding) // Bottom right
+          ctx.closePath()
+          ctx.stroke()
+          break
+        case 'square':
+          // Draw square outline for group indicator
+          const squareSize = Math.min(width, height)
+          const squareX = x + (width - squareSize) / 2
+          const squareY = y + (height - squareSize) / 2
+          ctx.strokeRect(squareX - padding, squareY - padding, squareSize + padding * 2, squareSize + padding * 2)
+          break
+        case 'hexagon':
+          // Draw hexagon outline for group indicator
+          const hexRadius = Math.min(width, height) / 2 + padding
+          const hexGroupCenterX = x + width / 2
+          const hexGroupCenterY = y + height / 2
+          
+          ctx.beginPath()
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3
+            const pointX = hexGroupCenterX + hexRadius * Math.cos(angle)
+            const pointY = hexGroupCenterY + hexRadius * Math.sin(angle)
+            
+            if (i === 0) {
+              ctx.moveTo(pointX, pointY)
+            } else {
+              ctx.lineTo(pointX, pointY)
+            }
+          }
+          ctx.closePath()
+          ctx.stroke()
+          break
+        case 'object':
+          // Draw object outline for group indicator (simplified to rectangle)
+          ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
+          break
         default:
           ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
           break
@@ -1659,6 +2307,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       switch (element.type) {
         case 'rectangle':
         case 'text':
+        case 'textbox':
           ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
           break
         case 'stage':
@@ -1790,6 +2439,90 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           } else {
             // Fallback to rectangle outline
             ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+          }
+          break
+        case 'triangle':
+          // Draw triangle selection outline
+          ctx.beginPath()
+          ctx.moveTo(x + width / 2, y - 2) // Top point
+          ctx.lineTo(x - 2, y + height + 2) // Bottom left
+          ctx.lineTo(x + width + 2, y + height + 2) // Bottom right
+          ctx.closePath()
+          ctx.stroke()
+          break
+        case 'square':
+          // Draw square selection outline
+          const squareSize = Math.min(width, height)
+          const squareX = x + (width - squareSize) / 2
+          const squareY = y + (height - squareSize) / 2
+          ctx.strokeRect(squareX - 2, squareY - 2, squareSize + 4, squareSize + 4)
+          break
+        case 'hexagon':
+          // Draw hexagon selection outline
+          const hexRadius = Math.min(width, height) / 2 + 2
+          const hexSelectionCenterX = x + width / 2
+          const hexSelectionCenterY = y + height / 2
+          
+          ctx.beginPath()
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3
+            const pointX = hexSelectionCenterX + hexRadius * Math.cos(angle)
+            const pointY = hexSelectionCenterY + hexRadius * Math.sin(angle)
+            
+            if (i === 0) {
+              ctx.moveTo(pointX, pointY)
+            } else {
+              ctx.lineTo(pointX, pointY)
+            }
+          }
+          ctx.closePath()
+          ctx.stroke()
+          break
+        case 'object':
+          // Draw object selection outline based on its shape
+          const objectShape = element.objectShape || 'square'
+          
+          switch (objectShape) {
+            case 'triangle':
+              ctx.beginPath()
+              ctx.moveTo(x + width / 2, y - 2) // Top point
+              ctx.lineTo(x - 2, y + height + 2) // Bottom left
+              ctx.lineTo(x + width + 2, y + height + 2) // Bottom right
+              ctx.closePath()
+              ctx.stroke()
+              break
+              
+            case 'square':
+              const squareSize = Math.min(width, height)
+              const squareX = x + (width - squareSize) / 2
+              const squareY = y + (height - squareSize) / 2
+              ctx.strokeRect(squareX - 2, squareY - 2, squareSize + 4, squareSize + 4)
+              break
+              
+            case 'hexagon':
+              const hexRadius = Math.min(width, height) / 2 + 2
+              const hexSelectionCenterX = x + width / 2
+              const hexSelectionCenterY = y + height / 2
+              
+              ctx.beginPath()
+              for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI) / 3
+                const pointX = hexSelectionCenterX + hexRadius * Math.cos(angle)
+                const pointY = hexSelectionCenterY + hexRadius * Math.sin(angle)
+                
+                if (i === 0) {
+                  ctx.moveTo(pointX, pointY)
+                } else {
+                  ctx.lineTo(pointX, pointY)
+                }
+              }
+              ctx.closePath()
+              ctx.stroke()
+              break
+              
+            default: // rectangle
+              ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+              break
           }
           break
       }
@@ -1996,6 +2729,34 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
         
         onAddElement(actorElement)
+      } else if (data.type === 'object') {
+        const rect = canvasRef.current?.getBoundingClientRect()
+        if (!rect) return
+        
+        // Convert screen coordinates to canvas coordinates
+        const canvasPoint = screenToCanvas(e.clientX, e.clientY)
+        
+        // Create object element
+        const objectElement: Omit<Element, 'id'> = {
+          type: 'object',
+          x: canvasPoint.x - (data.objectWidth || 60) / 2, // Center on drop point
+          y: canvasPoint.y - (data.objectHeight || 60) / 2,
+          width: data.objectWidth || 60,
+          height: data.objectHeight || 60,
+          objectId: data.objectId,
+          objectName: data.objectName,
+          objectInitials: data.objectInitials,
+          objectNotes: data.objectNotes,
+          objectShape: data.objectShape,
+          fillColor: 'transparent',
+          strokeColor: data.objectColor,
+          strokeWidth: 2,
+          strokeDasharray: '5,5',
+          opacity: 1,
+          zIndex: elements.length
+        }
+        
+        onAddElement(objectElement)
       }
     } catch (error) {
       console.error('Error handling drop:', error)
@@ -2008,8 +2769,6 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         ref={canvasRef}
         className={`absolute inset-0 cursor-crosshair transition-all duration-200 ${
           isDragOver ? 'ring-2 ring-blue-400 ring-opacity-50 bg-blue-50 bg-opacity-10' : ''
-        } ${
-          isTransitioning ? 'opacity-75 transition-opacity duration-300' : ''
         }`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -2085,15 +2844,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         </div>
       )}
       
-      {/* Transition Overlay */}
-      {isTransitioning && (
-        <div className="absolute inset-0 bg-black bg-opacity-20 z-40 flex items-center justify-center">
-          <div className="bg-white rounded-lg p-4 shadow-xl flex items-center gap-3">
-            <div className="w-6 h-6 border-3 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <span className="text-gray-700 font-medium">Transicionando para próxima cena...</span>
-          </div>
-        </div>
-      )}
+
+      
+
       
       <ActorModal
           isOpen={showActorModal}
@@ -2102,6 +2855,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           position={actorModalPosition}
           currentActorCount={elements.filter(el => el.type === 'actor').length}
         />
+
+      <FullscreenSlideshow />
     </>
   )
 })

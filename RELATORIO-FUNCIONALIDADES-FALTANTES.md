@@ -25,7 +25,7 @@ Após análise completa do código atual do editor, identifiquei que **a maioria
 **Status: ❌ NÃO IMPLEMENTADO**
 
 ### Faltam:
-- [ ] Configurações específicas do palco (tamanho, forma, cor)
+- [x] Configurações específicas do palco (tamanho, forma, cor)
 - [ ] Duplo clique no palco para liberar movimentação
 - [ ] Sincronização da posição do palco em todas as cenas
 - [ ] Remoção da possibilidade de mover o canvas inteiro (após setar o palco)

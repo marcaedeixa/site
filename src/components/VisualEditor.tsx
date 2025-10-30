@@ -52,7 +52,8 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     resetStore,
     scenes,
     nextScene,
-    previousScene
+    previousScene,
+    isFullscreenSlideshow
   } = useEditorStore()
 
   // Auto-save functionality
@@ -453,9 +454,6 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       <EditorTopToolbar 
         onSave={autoSave}
         selectedElements={selectedElements}
-        onGroupElements={handleGroupElements}
-        onUngroupElements={handleUngroupElements}
-        onWeldElements={handleWeldElements}
         onUnionElements={handleUnionElements}
         onSubtractElements={handleSubtractElements}
         onIntersectElements={handleIntersectElements}
@@ -467,15 +465,10 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
         {/* Toolbar à esquerda na vertical */}
         <EditorToolbar 
           selectedTool={selectedTool}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onUndo={undo}
-          onRedo={redo}
           onSave={autoSave}
           selectedElements={selectedElements}
           onGroupElements={handleGroupElements}
           onUngroupElements={handleUngroupElements}
-          onWeldElements={handleWeldElements}
           onUnionElements={handleUnionElements}
           onSubtractElements={handleSubtractElements}
           onIntersectElements={handleIntersectElements}
@@ -510,7 +503,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       </div>
 
       {/* Barra inferior com cenas - posição absoluta fixa */}
-      <EditorBottomBar />
+      {!isFullscreenSlideshow && <EditorBottomBar />}
     </div>
   )
 }

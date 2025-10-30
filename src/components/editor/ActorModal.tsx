@@ -40,9 +40,6 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
   
   const [formData, setFormData] = useState({
     actorName: initialData?.actorName || '',
-    actorRole: initialData?.actorRole || '',
-    actorSpeech: initialData?.actorSpeech || '',
-    actorShape: initialData?.actorShape || 'circle' as 'circle' | 'square',
     strokeColor: initialData?.strokeColor || '#3B82F6',
     fillColor: initialData?.fillColor || '#E0F2FE'
   })
@@ -91,9 +88,9 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         user_id: user.id,
         name: formData.actorName.trim(),
         color: formData.strokeColor,
-        notes: formData.actorRole.trim() || null,
+        notes: null,
         appearance_config: {
-          shape: formData.actorShape,
+          shape: 'circle',
           size: 50
         },
         default_speech_bubble: {
@@ -125,9 +122,7 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         width: 50,
         height: 50,
         actorName: formData.actorName.trim(),
-        actorRole: formData.actorRole.trim(),
-        actorSpeech: formData.actorSpeech.trim(),
-        actorShape: formData.actorShape,
+        actorShape: 'circle',
         actorInitials: generateInitials(formData.actorName.trim()),
         strokeColor: formData.strokeColor,
         fillColor: formData.fillColor,
@@ -141,9 +136,6 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
       // Reset form
       setFormData({
         actorName: '',
-        actorRole: '',
-        actorSpeech: '',
-        actorShape: 'circle',
         strokeColor: '#3B82F6',
         fillColor: '#E0F2FE'
       })
@@ -196,45 +188,7 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
             )}
           </div>
 
-          {/* Papel */}
-          <div className="space-y-2">
-            <Label htmlFor="actorRole">Papel</Label>
-            <Input
-              id="actorRole"
-              placeholder="Ex: Protagonista, Vilão, etc."
-              value={formData.actorRole}
-              onChange={(e) => handleInputChange('actorRole', e.target.value)}
-            />
-          </div>
 
-          {/* Fala */}
-          <div className="space-y-2">
-            <Label htmlFor="actorSpeech">Fala</Label>
-            <Textarea
-              id="actorSpeech"
-              placeholder="Digite a fala do ator (opcional)"
-              value={formData.actorSpeech}
-              onChange={(e) => handleInputChange('actorSpeech', e.target.value)}
-              rows={3}
-            />
-          </div>
-
-          {/* Forma */}
-          <div className="space-y-2">
-            <Label htmlFor="actorShape">Forma</Label>
-            <Select
-              value={formData.actorShape}
-              onValueChange={(value) => handleInputChange('actorShape', value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="circle">Círculo</SelectItem>
-                <SelectItem value="square">Quadrado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Cor */}
           <div className="space-y-2">
@@ -281,12 +235,6 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
                 </div>
                 <div>
                   <p className="font-medium">{formData.actorName}</p>
-                  {formData.actorRole && (
-                    <p className="text-sm text-gray-600">{formData.actorRole}</p>
-                  )}
-                  {formData.actorSpeech && (
-                    <p className="text-xs text-gray-500 italic">&quot;{formData.actorSpeech}&quot;</p>
-                  )}
                 </div>
               </div>
             </div>

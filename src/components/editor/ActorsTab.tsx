@@ -7,9 +7,11 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth.tsx'
 import { 
   Trash2, 
-  User
+  User,
+  Plus
 } from 'lucide-react'
 import { useParams } from 'next/navigation'
+import { Element } from '@/hooks/useEditorStore'
 
 interface Actor {
   id: string
@@ -40,7 +42,7 @@ export function ActorsTab() {
   const [actors, setActors] = useState<Actor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState<string | null>(null)
+  const [deletingActorId, setDeletingActorId] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -92,7 +94,7 @@ export function ActorsTab() {
     if (!user || !confirm('Tem certeza que deseja excluir este ator?')) return
     
     try {
-      setDeleting(actorId)
+      setDeletingActorId(actorId)
       setError(null)
       
       const { error } = await supabase
@@ -108,7 +110,7 @@ export function ActorsTab() {
       console.error('Erro ao excluir ator:', err)
       setError('Erro ao excluir ator. Tente novamente.')
     } finally {
-      setDeleting(null)
+      setDeletingActorId(null)
     }
   }
 
@@ -122,6 +124,8 @@ export function ActorsTab() {
     }
   }, [error])
 
+
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -134,10 +138,12 @@ export function ActorsTab() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h3 className="text-lg font-semibold">Atores do Projeto</h3>
-        <p className="text-sm text-gray-600">Use a ferramenta de ator no editor para criar novos atores</p>
-        <p className="text-xs text-blue-600 mt-1">💡 Arraste os atores para o canvas para adicioná-los ao projeto</p>
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-lg font-semibold">Atores do Projeto</h3>
+          <p className="text-sm text-gray-600">Gerencie os atores do seu projeto</p>
+          <p className="text-xs text-blue-600 mt-1">💡 Arraste os atores para o canvas para adicioná-los ao projeto</p>
+        </div>
       </div>
 
       {/* Mensagens de feedback */}
@@ -156,11 +162,11 @@ export function ActorsTab() {
             <p className="text-sm text-gray-400">Use a ferramenta de ator no editor para criar</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 min-w-0">
             {actors.map((actor) => (
               <Card 
-                key={actor.id} 
-                className="hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
+                key={actor.id}
+                className="hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing relative min-w-0 overflow-hidden"
                 draggable={true}
                 onDragStart={(e) => {
                   // Gerar iniciais do nome do ator
@@ -192,36 +198,36 @@ export function ActorsTab() {
                   e.currentTarget.style.cursor = 'grab'
                 }}
               >
-                <CardContent className="p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      {/* Avatar do ator */}
-                      <div 
-                        className="w-10 h-10 flex items-center justify-center text-white font-semibold text-sm rounded-full"
-                        style={{ backgroundColor: actor.color || '#3b82f6' }}
-                      >
-                        {actor.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      
-                      {/* Nome do ator */}
-                      <h4 className="font-medium text-gray-900 truncate">{actor.name}</h4>
+                <CardContent className="p-2">
+                  <div className="flex flex-col items-center text-center">
+                    {/* Avatar do ator */}
+                    <div 
+                      className={`w-8 h-8 flex items-center justify-center text-white font-semibold text-xs mb-1 ${
+                        actor.appearance_config?.shape === 'square' ? 'rounded-md' : 'rounded-full'
+                      }`}
+                      style={{ backgroundColor: actor.color || '#3b82f6' }}
+                    >
+                      {actor.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     
-                    {/* Botão de excluir */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteActor(actor.id)}
-                      disabled={deleting === actor.id}
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"
-                    >
-                      {deleting === actor.id ? (
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
+                    {/* Nome do ator */}
+                    <h4 className="text-xs font-medium text-gray-900 truncate w-full">{actor.name}</h4>
                   </div>
+                  
+                  {/* Botão de excluir - posicionado no canto superior direito */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteActor(actor.id)}
+                    disabled={deletingActorId === actor.id}
+                    className="absolute top-1 right-1 text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
+                  >
+                    {deletingActorId === actor.id ? (
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -229,7 +235,7 @@ export function ActorsTab() {
         )}
       </div>
 
-      {/* Removed edit dialog for simplified design */}
+
     </div>
   )
 }

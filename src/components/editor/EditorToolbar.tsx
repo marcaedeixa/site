@@ -11,12 +11,9 @@ import {
   Type, 
   PenTool, 
   Eraser,
-  User,
   Group,
   Ungroup,
   Combine,
-  Undo2, 
-  Redo2, 
   Save,
   Download,
   ZoomIn,
@@ -39,15 +36,10 @@ import { exportProjectData } from '@/lib/projectData'
 
 interface EditorToolbarProps {
   selectedTool: Tool
-  canUndo: boolean
-  canRedo: boolean
-  onUndo: () => void
-  onRedo: () => void
   onSave: () => void
   selectedElements: string[]
   onGroupElements: () => void
   onUngroupElements: () => void
-  onWeldElements: () => void
   onUnionElements: () => void
   onSubtractElements: () => void
   onIntersectElements: () => void
@@ -63,20 +55,14 @@ const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>
   { id: 'text', icon: Type, label: 'Texto', shortcut: 'T' },
   { id: 'pen', icon: PenTool, label: 'Caneta', shortcut: 'P' },
   { id: 'eraser', icon: Eraser, label: 'Borracha', shortcut: 'E' },
-  { id: 'actor', icon: User, label: 'Ator', shortcut: 'U' },
 ]
 
 export function EditorToolbar({ 
   selectedTool, 
-  canUndo, 
-  canRedo, 
-  onUndo, 
-  onRedo, 
   onSave,
   selectedElements,
   onGroupElements,
   onUngroupElements,
-  onWeldElements,
   onUnionElements,
   onSubtractElements,
   onIntersectElements,
@@ -190,31 +176,7 @@ export function EditorToolbar({
 
   return (
     <div className="bg-white border-l border-gray-200 px-2 py-4 flex flex-col gap-4 w-16 min-h-full">
-      {/* History Actions */}
-      <div className="flex flex-col gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onUndo}
-          disabled={!canUndo}
-          title="Desfazer (Ctrl+Z)"
-          className="w-12 h-12 p-0"
-        >
-          <Undo2 className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onRedo}
-          disabled={!canRedo}
-          title="Refazer (Ctrl+Y)"
-          className="w-12 h-12 p-0"
-        >
-          <Redo2 className="h-4 w-4" />
-        </Button>
-      </div>
 
-      <Separator orientation="horizontal" className="w-full" />
 
       {/* Drawing Tools */}
       <div className="flex flex-col gap-1">
