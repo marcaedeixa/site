@@ -131,6 +131,18 @@ export default function DashboardPage() {
       return () => clearTimeout(fallbackTimer)
     }
   }, [user?.id, authLoading, hasInitialLoad, loadProjects])
+
+  // Resetar cache e recarregar quando o usuário mudar
+  useEffect(() => {
+    if (!authLoading && user?.id) {
+      // Limpar cache e estado ao trocar de usuário
+      cacheRef.current = null
+      setProjects([])
+      setHasInitialLoad(false)
+      // Forçar recarregamento imediato para o novo usuário
+      loadProjects(true)
+    }
+  }, [user?.id, authLoading, loadProjects])
   
   // Auto-refresh a cada 2 minutos
   useEffect(() => {
