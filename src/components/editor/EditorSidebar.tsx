@@ -17,7 +17,7 @@ import {
   Palette, Settings, Layers, Users, Box, Lock, Unlock, Theater, MessageSquare, MoreHorizontal,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Group, Ungroup,
-  GripVertical
+  GripVertical, ChevronRight
 } from 'lucide-react'
 
 interface EditorSidebarProps {
@@ -267,34 +267,59 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     </div>
   )
 
+  const [isCollapsed, setIsCollapsed] = useState(true)
+
+  const handleTabClick = (value: string) => {
+    if (activeTab === value && !isCollapsed) {
+      setIsCollapsed(true)
+    } else {
+      setActiveTab(value)
+      setIsCollapsed(false)
+    }
+  }
+
+  // Sidebar agora é overlay absoluto; não precisa mais de largura dinâmica do container
+
   return (
-    <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="properties" className="flex items-center justify-center">
+    <div className="absolute inset-y-0 right-0 z-20 flex">
+      <Tabs value={activeTab} className="flex">
+        {/* Coluna de ícones (direita) */}
+        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-l bg-gray-50">
+          <TabsTrigger value="properties" onClick={() => handleTabClick('properties')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Settings className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="colors" className="flex items-center justify-center">
+          <TabsTrigger value="colors" onClick={() => handleTabClick('colors')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Palette className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="layers" className="flex items-center justify-center">
+          <TabsTrigger value="layers" onClick={() => handleTabClick('layers')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Layers className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="actors" className="flex items-center justify-center">
+          <TabsTrigger value="actors" onClick={() => handleTabClick('actors')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Users className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="objects" className="flex items-center justify-center">
+          <TabsTrigger value="objects" onClick={() => handleTabClick('objects')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Box className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="deixa" className="flex items-center justify-center">
+          <TabsTrigger value="deixa" onClick={() => handleTabClick('deixa')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <MessageSquare className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="tools" className="flex items-center justify-center">
+          <TabsTrigger value="tools" onClick={() => handleTabClick('tools')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <MoreHorizontal className="h-4 w-4" />
           </TabsTrigger>
         </TabsList>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Área de conteúdo das abas (retrátil) - overlay absoluto não empurra canvas */}
+        <div className={`${isCollapsed ? 'hidden' : 'block'} w-80 h-full border-l bg-white p-3 overflow-y-hidden relative`}>
+          {/* Botão para recolher o painel */}
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 w-8 p-0 absolute top-2 right-2"
+            title="Recolher painel"
+            onClick={() => setIsCollapsed(true)}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
           <TabsContent value="properties" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
             {selectedElements.length === 0 ? (
               <div className="text-center py-8">

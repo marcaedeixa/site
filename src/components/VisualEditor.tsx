@@ -493,13 +493,13 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
             onClearSelection={clearSelection}
             onUpdateViewport={setViewport}
           />
-        </div>
 
-        {/* Sidebar à direita */}
-        <EditorSidebar 
-          selectedElements={selectedElements}
-          onUpdateElement={updateElement}
-        />
+          {/* Sidebar à direita (overlay absoluto para não empurrar conteúdo) */}
+          <EditorSidebar 
+            selectedElements={selectedElements}
+            onUpdateElement={updateElement}
+          />
+        </div>
       </div>
 
       {/* Barra inferior com cenas - posição absoluta fixa */}
