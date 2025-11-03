@@ -19,7 +19,8 @@ import {
   Merge,
   XCircle,
   User,
-  Box
+  Box,
+  ChevronRight
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { exportProjectData } from '@/lib/projectData'
@@ -60,6 +61,12 @@ export function EditorTopToolbar({
   const [showObjectModal, setShowObjectModal] = useState(false)
   const [objectModalPosition] = useState({ x: 400, y: 300 })
   const [objectCount, setObjectCount] = useState(0)
+  
+  // Estado para controlar o dropdown de exportação
+  const [showExportDropdown, setShowExportDropdown] = useState(false)
+  
+  // Obter cenas do store
+  const { scenes, currentSceneIndex } = useEditorStore()
   
   // Carregar contagem de atores
   useEffect(() => {
@@ -215,13 +222,19 @@ export function EditorTopToolbar({
     }
   }
 
-  const handleExport = async (format: 'json' | 'svg' | 'png') => {
+  const handleExport = async (format: 'json' | 'svg' | 'png', sceneIndex?: number) => {
     try {
       const projectId = window.location.pathname.split('/').pop()
       
       if (!projectId) return
       
-      const data = await exportProjectData(projectId, format)
+      const data = await exportProjectData(projectId, format, sceneIndex)
+      
+      // Determinar o nome do arquivo
+      let fileName = 'projeto'
+      if (sceneIndex !== undefined && scenes[sceneIndex]) {
+        fileName = `${scenes[sceneIndex].name.replace(/[^a-zA-Z0-9]/g, '_')}`
+      }
       
       if (typeof data === 'string') {
         // JSON or SVG
@@ -231,7 +244,7 @@ export function EditorTopToolbar({
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `projeto.${format}`
+        a.download = `${fileName}.${format}`
         a.click()
         URL.revokeObjectURL(url)
       } else {
@@ -239,10 +252,13 @@ export function EditorTopToolbar({
         const url = URL.createObjectURL(data)
         const a = document.createElement('a')
         a.href = url
-        a.download = `projeto.${format}`
+        a.download = `${fileName}.${format}`
         a.click()
         URL.revokeObjectURL(url)
       }
+      
+      // Fechar o dropdown após exportar
+      setShowExportDropdown(false)
     } catch (error) {
       console.error('Erro ao exportar:', error)
     }
@@ -430,25 +446,45 @@ export function EditorTopToolbar({
           
           {/* Export Dropdown */}
           <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-            <div className="py-1 min-w-[120px]">
+            <div className="py-1 min-w-[200px]">
               <button
                 onClick={() => handleExport('json')}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
               >
-                JSON
+                <Download className="mr-2 h-4 w-4" />
+                Exportar JSON
               </button>
               <button
                 onClick={() => handleExport('svg')}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
               >
-                SVG
+                <Download className="mr-2 h-4 w-4" />
+                Exportar SVG
               </button>
+              <div className="border-t border-gray-200 my-1"></div>
+              <div className="px-3 py-2 text-xs font-medium text-gray-500">Exportar PNG</div>
               <button
                 onClick={() => handleExport('png')}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors"
+                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
               >
-                PNG
+                <Download className="mr-2 h-4 w-4" />
+                Projeto Completo
               </button>
+              {scenes.map((scene, index) => (
+                <button
+                  key={scene.id}
+                  onClick={() => handleExport('png', index)}
+                  className="w-full px-6 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center">
+                    <ChevronRight className="mr-2 h-3 w-3" />
+                    {scene.name}
+                  </div>
+                  {index === currentSceneIndex && (
+                    <span className="text-xs text-gray-400">(atual)</span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>

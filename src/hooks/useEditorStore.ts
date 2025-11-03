@@ -82,6 +82,7 @@ export interface Element {
   textBoxConfig?: {
     previewMode: 'full' | 'start' | 'end' | 'start-end'
     fullText: string
+    lineHeight?: number
   }
   circleStrokeWidth?: number
 }
@@ -121,6 +122,7 @@ export interface Scene {
   stageConfig: StageConfig | null
   timestamp: string
   thumbnail?: string
+  notes?: string
   // Campos de deixa
   deixaAtual?: string
   deixaSeguinte?: string
@@ -140,6 +142,8 @@ interface EditorStore {
   
   // Stage configuration
   stageConfig: StageConfig | null
+  hoverPreviewEnabled: boolean
+  hoverPreviewColor: string
   
   // Scene state
   scenes: Scene[]
@@ -196,7 +200,9 @@ interface EditorStore {
   setStrokeWidth: (width: number) => void
   setOpacity: (opacity: number) => void
   setFontSize: (size: number) => void
-  
+  setHoverPreviewEnabled: (enabled: boolean) => void
+  setHoverPreviewColor: (color: string) => void
+
   // Group operations
   groupElements: (elementIds: string[]) => void
   ungroupElements: (groupId: string) => void
@@ -209,6 +215,7 @@ interface EditorStore {
   unlockGroup: (groupId: string) => void
   createStage: (elementIds: string[]) => void
   isElementLocked: (elementId: string) => boolean
+  validateGeometricElements: (elementIds: string[]) => { valid: string[], invalid: string[], hasValidElements: boolean }
   
   // Layer operations
   bringToFront: (elementIds: string[]) => void
@@ -241,11 +248,18 @@ interface EditorStore {
   updateStageConfig: (updates: Partial<StageConfig>) => void
   removeStageConfig: () => void
   centerStage: () => void
+  syncStageAcrossScenes: () => void
   
   // Deixa operations
   updateDeixaAtual: (sceneIndex: number, deixa: string, autoFilled?: boolean) => void
   updateDeixaSeguinte: (sceneIndex: number, deixa: string, autoFilled?: boolean) => void
   syncDeixas: (sceneIndex: number, field: 'atual' | 'seguinte', value: string) => void
+  
+  // Scene notes operations
+  updateSceneNotes: (sceneIndex: number, notes: string) => void
+  
+  // Actor operations
+  removeActorFromAllScenes: (actorId: string) => void
   
   // Alignment operations
   alignElementsLeft: (elementIds: string[]) => void
@@ -262,6 +276,9 @@ interface EditorStore {
   
   // Initialize with sample data
   initializeWithSampleData: () => void
+
+  // History initialization
+  initializeHistory: () => void
 }
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -273,9 +290,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   viewport: { x: 0, y: 0, zoom: 1 },
   history: [],
   historyIndex: -1,
+  canUndo: false,
+  canRedo: false,
   
   // Stage configuration
   stageConfig: null,
+  hoverPreviewEnabled: false,
+  hoverPreviewColor: '#1d4ed8',
   
   // Scene state
   scenes: [],
@@ -358,24 +379,79 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
   
   updateElement: (id, updates) => {
-    set((state) => ({
-      elements: state.elements.map((el) =>
-        el.id === id ? { ...el, ...updates } : el
-      ),
-    }))
+    let stageAffected = false
+
+    set((state) => {
+      const stageGroup = state.groups.find(group => group.name === 'Palco')
+
+      const updatedElements = state.elements.map((el) => {
+        if (el.id !== id) {
+          return el
+        }
+
+        let mergedElement: Element = { ...el, ...updates }
+
+        if (el.type === 'textbox') {
+          const baseConfig = el.textBoxConfig || {
+            previewMode: 'full' as const,
+            fullText: el.text || ''
+          }
+
+          mergedElement = {
+            ...mergedElement,
+            textBoxConfig: {
+              ...baseConfig,
+              ...updates.textBoxConfig,
+              ...(updates.text !== undefined ? { fullText: updates.text } : {})
+            }
+          }
+        }
+
+        if (stageGroup && (mergedElement.type === 'stage' || stageGroup.elementIds.includes(mergedElement.id))) {
+          stageAffected = true
+        }
+
+        return mergedElement
+      })
+
+      return { elements: updatedElements }
+    })
     
     get().saveToHistory()
     get().updateCurrentScene()
+
+    if (stageAffected) {
+      get().syncStageAcrossScenes()
+    }
   },
   
   deleteElements: (ids) => {
+    const { elements, groups } = get()
+    const stageGroup = groups.find(group => group.name === 'Palco')
+
+    const protectedIds = new Set(
+      elements
+        .filter(el => ids.includes(el.id) && (el.type === 'stage' || (stageGroup && stageGroup.elementIds.includes(el.id))))
+        .map(el => el.id)
+    )
+
+    if (protectedIds.size > 0) {
+      console.warn('Elementos do palco não podem ser removidos diretamente.')
+    }
+
+    const allowedIds = ids.filter(id => !protectedIds.has(id))
+    if (allowedIds.length === 0) {
+      return
+    }
+
     set((state) => ({
-      elements: state.elements.filter((el) => !ids.includes(el.id)),
-      selectedElements: state.selectedElements.filter((id) => !ids.includes(id)),
+      elements: state.elements.filter((el) => !allowedIds.includes(el.id)),
+      selectedElements: state.selectedElements.filter((id) => !allowedIds.includes(id)),
     }))
     
     get().saveToHistory()
     get().updateCurrentScene()
+    get().syncStageAcrossScenes()
   },
   
   duplicateElements: (ids) => {
@@ -423,6 +499,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       groups: JSON.parse(JSON.stringify(groups)),
       selectedElements: [...selectedElements],
     }
+
+    // Initialize history if it's empty
+    if (historyIndex < 0 || history.length === 0) {
+      set({
+        history: [newHistoryState],
+        historyIndex: 0,
+        canUndo: false,
+        canRedo: false,
+      })
+      return
+    }
     
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push(newHistoryState)
@@ -435,6 +522,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({
       history: newHistory,
       historyIndex: newHistory.length - 1,
+      canUndo: newHistory.length > 1,
+      canRedo: false,
     })
   },
   
@@ -442,12 +531,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { history, historyIndex } = get()
     
     if (historyIndex > 0) {
-      const previousState = history[historyIndex - 1]
+      const newIndex = historyIndex - 1
+      const previousState = history[newIndex]
       set({
         elements: previousState.elements,
         groups: previousState.groups,
         selectedElements: previousState.selectedElements,
-        historyIndex: historyIndex - 1,
+        historyIndex: newIndex,
+        canUndo: newIndex > 0,
+        canRedo: history.length > newIndex + 1,
       })
     }
   },
@@ -456,23 +548,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { history, historyIndex } = get()
     
     if (historyIndex < history.length - 1) {
-      const nextState = history[historyIndex + 1]
+      const newIndex = historyIndex + 1
+      const nextState = history[newIndex]
       set({
         elements: nextState.elements,
         groups: nextState.groups,
         selectedElements: nextState.selectedElements,
-        historyIndex: historyIndex + 1,
+        historyIndex: newIndex,
+        canUndo: newIndex > 0,
+        canRedo: newIndex < history.length - 1,
       })
     }
-  },
-  
-  get canUndo() {
-    return get().historyIndex > 0
-  },
-  
-  get canRedo() {
-    const { history, historyIndex } = get()
-    return historyIndex < history.length - 1
   },
   
   // Drawing
@@ -526,6 +612,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setStrokeWidth: (width) => set({ strokeWidth: width }),
   setOpacity: (opacity) => set({ opacity }),
   setFontSize: (size) => set({ fontSize: size }),
+  setHoverPreviewEnabled: (enabled) => set({ hoverPreviewEnabled: enabled }),
+  setHoverPreviewColor: (color) => set({ hoverPreviewColor: color }),
   
   // Group operations
   groupElements: (elementIds) => {
@@ -645,6 +733,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (elementIds.length < 1) return
 
     const { elements, groups } = get()
+    
+    // Filtrar elementos válidos para palco: retângulos, círculos e formas compostas (paths)
+    const geometricElements = elementIds
+      .map(id => elements.find(el => el.id === id))
+      .filter(el => el && (el.type === 'rectangle' || el.type === 'circle' || el.type === 'path'))
+    
+    if (geometricElements.length === 0) {
+      console.warn('Nenhum elemento válido (retângulo, círculo ou forma composta) foi selecionado para criar o palco')
+      return
+    }
+    
+    // Usar apenas os IDs dos elementos geométricos válidos
+    const validElementIds = geometricElements.map(el => el.id)
+    
     const minZIndex = Math.min(...elements.map(el => el.zIndex || 0))
     const stageZIndex = Math.max(0, minZIndex - 100) // Garantir que o palco fique bem no fundo
 
@@ -652,41 +754,42 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const existingStageGroup = groups.find(g => g.name === 'Palco')
 
     if (existingStageGroup) {
+      // Se o palco existente estiver travado, não permitir criar/atualizar
+      if (existingStageGroup.locked) {
+        console.warn('Palco travado: destrave o palco antes de adicionar/atualizar elementos.')
+        return
+      }
+
       const existingId = existingStageGroup.id
 
       set((state) => {
         // Elementos anteriormente no grupo Palco
         const prevStageElementIds = existingStageGroup.elementIds
+        // Agregar novos IDs válidos ao conjunto atual (quando destravado)
+        const newStageIdsSet = new Set([...prevStageElementIds, ...validElementIds])
+        const mergedStageElementIds = Array.from(newStageIdsSet)
 
         const updatedElements = state.elements.map((el) => {
-          if (elementIds.includes(el.id)) {
-            // Novos elementos do palco: atribuir ao grupo existente e bloquear
+          if (mergedStageElementIds.includes(el.id)) {
+            // Elementos do palco: atribuir ao grupo existente e respeitar estado de lock atual do grupo
+            const indexInValid = validElementIds.indexOf(el.id)
+            const z = indexInValid >= 0 ? (stageZIndex + indexInValid) : (el.zIndex || stageZIndex)
             return {
               ...el,
               groupId: existingId,
-              locked: true,
-              zIndex: stageZIndex + elementIds.indexOf(el.id)
-            }
-          }
-          if (prevStageElementIds.includes(el.id) && !elementIds.includes(el.id)) {
-            // Elementos que saem do palco: liberar e remover relação de grupo
-            return {
-              ...el,
-              locked: false,
-              groupId: undefined,
-              // Elevar levemente acima da base do palco
-              zIndex: (el.zIndex || 0) + 200
+              locked: existingStageGroup.locked,
+              zIndex: z
             }
           }
           // Garantir que outros elementos fiquem acima do palco
-          return el.zIndex <= stageZIndex + elementIds.length
+          return el.zIndex <= stageZIndex + mergedStageElementIds.length
             ? { ...el, zIndex: (el.zIndex || 0) + 200 }
             : el
         })
 
         const updatedGroups = state.groups.map(g =>
           g.id === existingId
-            ? { ...g, elementIds: elementIds, locked: true }
+            ? { ...g, elementIds: mergedStageElementIds }
             : g
         )
 
@@ -697,6 +800,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         }
       })
 
+      get().syncStageAcrossScenes()
       get().saveToHistory()
       return
     }
@@ -705,7 +809,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const groupId = nanoid()
     const newGroup: Group = {
       id: groupId,
-      elementIds,
+      elementIds: validElementIds,
       type: 'group',
       locked: true,
       name: 'Palco'
@@ -714,22 +818,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => ({
       groups: [...state.groups, newGroup],
       elements: state.elements.map((el) => {
-        if (elementIds.includes(el.id)) {
+        if (validElementIds.includes(el.id)) {
           return {
             ...el,
             groupId,
-            locked: true,
-            zIndex: stageZIndex + elementIds.indexOf(el.id)
+            // Ao criar, travamos o palco por padrão; usuário pode destravar depois
+            locked: newGroup.locked,
+            zIndex: stageZIndex + validElementIds.indexOf(el.id)
           }
         }
         // Garantir que outros elementos fiquem acima do palco
-        return el.zIndex <= stageZIndex + elementIds.length
+        return el.zIndex <= stageZIndex + validElementIds.length
           ? { ...el, zIndex: (el.zIndex || 0) + 200 }
           : el
       }),
       selectedElements: []
     }))
 
+    get().syncStageAcrossScenes()
     get().saveToHistory()
   },
   
@@ -747,6 +853,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     
     return false
+  },
+
+  validateGeometricElements: (elementIds) => {
+    const { elements } = get()
+    const valid: string[] = []
+    const invalid: string[] = []
+    
+    elementIds.forEach(id => {
+      const element = elements.find(el => el.id === id)
+      if (element) {
+        if (element.type === 'rectangle' || element.type === 'circle' || element.type === 'path') {
+          valid.push(id)
+        } else {
+          invalid.push(id)
+        }
+      }
+    })
+    
+    return {
+      valid,
+      invalid,
+      hasValidElements: valid.length > 0
+    }
   },
   
   // Layer operations
@@ -930,6 +1059,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       currentSceneIndex: index,
       selectedElements: []
     })
+
+    get().initializeHistory()
   },
   
   updateSceneName: (index, name) => {
@@ -1147,6 +1278,49 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })
   },
 
+  syncStageAcrossScenes: () => {
+    const { scenes, groups, elements } = get()
+    if (!scenes || scenes.length === 0) {
+      return
+    }
+
+    const stageGroup = groups.find(group => group.name === 'Palco')
+    if (!stageGroup) {
+      return
+    }
+
+    const stageElements = stageGroup.elementIds
+      .map(id => elements.find(el => el?.id === id))
+      .filter((el): el is Element => Boolean(el))
+
+    if (stageElements.length === 0) {
+      return
+    }
+
+    const serializedStageElements = stageElements.map(el => JSON.stringify(el))
+    const stageElementIdSet = new Set(stageGroup.elementIds)
+
+    set((state) => ({
+      scenes: state.scenes.map(scene => {
+        const filteredElements = scene.elements.filter(el => !stageElementIdSet.has(el.id))
+        const filteredGroups = scene.groups.filter(group => group.id !== stageGroup.id && group.name !== 'Palco')
+
+        return {
+          ...scene,
+          elements: [
+            ...filteredElements,
+            ...serializedStageElements.map(serialized => JSON.parse(serialized) as Element)
+          ],
+          groups: [
+            ...filteredGroups,
+            { ...stageGroup, elementIds: [...stageGroup.elementIds] }
+          ],
+          timestamp: new Date().toISOString()
+        }
+      })
+    }))
+  },
+
   combineShapesIntoStage: (elementIds) => {
     if (elementIds.length < 2) return
     
@@ -1204,7 +1378,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ],
         selectedElements: []
       }))
-      
+
+      get().syncStageAcrossScenes()
       get().saveToHistory()
     }
   },
@@ -1263,6 +1438,47 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         )
       }))
     }
+  },
+  
+  updateSceneNotes: (sceneIndex, notes) => {
+    set((state) => ({
+      scenes: state.scenes.map((scene, index) => 
+        index === sceneIndex 
+          ? { ...scene, notes }
+          : scene
+      )
+    }))
+  },
+  
+  removeActorFromAllScenes: (actorId) => {
+    const { currentSceneIndex } = get()
+    
+    set((state) => {
+      // Remove elementos de ator de todas as cenas
+      const updatedScenes = state.scenes.map(scene => ({
+        ...scene,
+        elements: scene.elements.filter(element => 
+          !(element.type === 'actor' && element.actorId === actorId)
+        )
+      }))
+      
+      // Remove elementos de ator da cena atual também
+      const updatedElements = state.elements.filter(element => 
+        !(element.type === 'actor' && element.actorId === actorId)
+      )
+      
+      // Remove elementos selecionados se algum for do ator excluído
+      const updatedSelectedElements = state.selectedElements.filter(elementId => {
+        const element = state.elements.find(el => el.id === elementId)
+        return !(element?.type === 'actor' && element?.actorId === actorId)
+      })
+      
+      return {
+        scenes: updatedScenes,
+        elements: updatedElements,
+        selectedElements: updatedSelectedElements
+      }
+    })
   },
   
   // Alignment operations
@@ -1473,7 +1689,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       fillColor: 'transparent',
       strokeWidth: 2,
       opacity: 1,
-      fontSize: 16
+      fontSize: 16,
+      canUndo: false,
+      canRedo: false,
+      hoverPreviewEnabled: false,
+      hoverPreviewColor: '#1d4ed8',
+    })
+  },
+  
+  initializeHistory: () => {
+    const { elements, groups, selectedElements } = get()
+
+    const historyState: HistoryState = {
+      elements: JSON.parse(JSON.stringify(elements)),
+      groups: JSON.parse(JSON.stringify(groups)),
+      selectedElements: [...selectedElements],
+    }
+
+    set({
+      history: [historyState],
+      historyIndex: 0,
+      canUndo: false,
+      canRedo: false,
     })
   },
   
@@ -1612,5 +1849,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       elements: JSON.parse(JSON.stringify(sampleElements)),
       stageConfig: JSON.parse(JSON.stringify(sampleStageConfig))
     })
+
+    get().initializeHistory()
   },
 }))

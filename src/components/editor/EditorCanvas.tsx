@@ -1,6 +1,6 @@
 'use client'
 
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useCallback } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useCallback, useMemo } from 'react'
 import { Element, Point, Tool, Viewport, useEditorStore } from '@/hooks/useEditorStore'
 import { ActorModal } from './ActorModal'
 import { FullscreenSlideshow } from './FullscreenSlideshow'
@@ -60,17 +60,56 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const [snapEnabled, setSnapEnabled] = useState(true)
   const [tooltip, setTooltip] = useState<{ x: number, y: number, text: string } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [textEditor, setTextEditor] = useState<{ elementId: string; value: string; initialValue: string } | null>(null)
+  const textAreaRef = useRef<HTMLTextAreaElement | null>(null)
+  const textMeasureContextRef = useRef<CanvasRenderingContext2D | null>(null)
+  const pendingTextElementRef = useRef(false)
+  const previousElementsRef = useRef<Element[]>([])
   
   // Guide lines state
   const [guideLines, setGuideLines] = useState<{
     vertical: number[]
     horizontal: number[]
   }>({ vertical: [], horizontal: [] })
+  const [hoveredElementId, setHoveredElementId] = useState<string | null>(null)
   
 
 
   // Get slideshow state from store
-  const { stageConfig, isPlayingSlideshow } = useEditorStore()
+  const { stageConfig, isPlayingSlideshow, hoverPreviewEnabled, hoverPreviewColor } = useEditorStore()
+
+  useEffect(() => {
+    if (!hoverPreviewEnabled && hoveredElementId) {
+      setHoveredElementId(null)
+    }
+  }, [hoverPreviewEnabled, hoveredElementId])
+
+  useEffect(() => {
+    const measureCanvas = document.createElement('canvas')
+    textMeasureContextRef.current = measureCanvas.getContext('2d')
+    return () => {
+      textMeasureContextRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (textEditor && textAreaRef.current) {
+      const textarea = textAreaRef.current
+      textarea.focus()
+      const length = textEditor.value.length
+      requestAnimationFrame(() => {
+        textarea.setSelectionRange(length, length)
+      })
+    }
+  }, [textEditor])
+
+  useEffect(() => {
+    if (!textEditor) return
+    const exists = elements.some(el => el.id === textEditor.elementId && (el.type === 'text' || el.type === 'textbox'))
+    if (!exists) {
+      setTextEditor(null)
+    }
+  }, [elements, textEditor])
 
   useImperativeHandle(ref, () => canvasRef.current!)
 
@@ -147,6 +186,237 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     
     return size
   }, [snapEnabled])
+
+  const measureTextWidth = useCallback((text: string, fontSize: number): number => {
+    const ctx = textMeasureContextRef.current
+    if (!ctx) {
+      return Math.max(fontSize, text.length * (fontSize * 0.6))
+    }
+    ctx.font = `${fontSize}px Arial`
+    const metrics = ctx.measureText(text || 'M')
+    return Math.max(fontSize, metrics.width)
+  }, [])
+
+  const computeTextMetrics = useCallback((value: string, fontSize: number) => {
+    const sanitized = value ?? ''
+    const lines = sanitized.split(/\r?\n/)
+    const lineHeight = fontSize * 1.2
+    const maxLineWidth = Math.max(fontSize, ...lines.map(line => measureTextWidth(line, fontSize)))
+    const width = Math.max(fontSize * 2, Math.ceil(maxLineWidth) + 2)
+    const height = Math.max(lineHeight, lines.length * lineHeight)
+    return { lines, lineHeight, width, height: Math.ceil(height) + 2 }
+  }, [measureTextWidth])
+
+  const openTextEditor = useCallback((element: Element) => {
+    setTextEditor({
+      elementId: element.id,
+      value: element.text || '',
+      initialValue: element.text || ''
+    })
+    onSelectElements([element.id])
+  }, [onSelectElements])
+
+  useEffect(() => {
+    if (pendingTextElementRef.current) {
+      const previousIds = new Set(previousElementsRef.current.map(el => el.id))
+      const newTextElement = elements.find(el => !previousIds.has(el.id) && el.type === 'text')
+      if (newTextElement) {
+        pendingTextElementRef.current = false
+        openTextEditor(newTextElement)
+      }
+    }
+    previousElementsRef.current = elements
+  }, [elements, openTextEditor])
+
+  const editingElement = useMemo(() => {
+    if (!textEditor) return null
+    return elements.find(el => el.id === textEditor.elementId) || null
+  }, [elements, textEditor])
+
+  const textEditorStyle = useMemo(() => {
+    if (!textEditor || !editingElement || !canvasRef.current || !containerRef.current) {
+      return null
+    }
+
+    const canvasRect = canvasRef.current.getBoundingClientRect()
+    const containerRect = containerRef.current.getBoundingClientRect()
+    const fontSize = editingElement.fontSize ?? 16
+    const metrics = computeTextMetrics(textEditor.value, fontSize)
+
+    const rawLeft = canvasRect.left + viewport.x + (editingElement.x ?? 0) * viewport.zoom - containerRect.left
+    const rawTop = canvasRect.top + viewport.y + (editingElement.y ?? 0) * viewport.zoom - containerRect.top
+
+    let editorWidth = metrics.width
+    let editorHeight = metrics.height
+    let editorLineHeight = metrics.lineHeight
+    let padding = 0
+
+    if (editingElement.type === 'textbox') {
+      const baseWidth = editingElement.width ?? metrics.width
+      const lines = Math.max(1, textEditor.value.split(/\r?\n/).length)
+      const lineHeightBox = fontSize * 1.4
+      padding = 8
+      const contentHeight = lines * lineHeightBox + padding * 2
+      editorWidth = baseWidth
+      editorHeight = Math.max(editingElement.height ?? fontSize * 1.5, contentHeight)
+      editorLineHeight = lineHeightBox
+    }
+
+    return {
+      position: 'absolute' as const,
+      left: Math.round(rawLeft),
+      top: Math.round(rawTop),
+      width: Math.max(1, Math.round(editorWidth * viewport.zoom)),
+      height: Math.max(1, Math.round(editorHeight * viewport.zoom)),
+      fontSize: `${fontSize * viewport.zoom}px`,
+      lineHeight: `${editorLineHeight * viewport.zoom}px`,
+      fontFamily: 'Arial, sans-serif',
+      color: editingElement.strokeColor || '#000000',
+      background: 'rgba(255,255,255,0.95)',
+      border: `${Math.max(1, 1 * viewport.zoom)}px solid #2563eb`,
+      borderRadius: 4,
+      padding: padding ? `${padding * viewport.zoom}px` : 0,
+      boxSizing: 'border-box' as const,
+      outline: 'none',
+      resize: 'none' as const,
+      boxShadow: '0 0 0 1px rgba(37,99,235,0.4)',
+      zIndex: 30,
+      overflow: 'hidden' as const,
+      whiteSpace: 'pre-wrap' as const,
+      backgroundClip: 'padding-box',
+      caretColor: editingElement.strokeColor || '#000000'
+    }
+  }, [textEditor, editingElement, viewport, containerRef, canvasRef, computeTextMetrics])
+
+  const updateTextElementDimensions = useCallback((elementId: string, value: string) => {
+    const element = elements.find(el => el.id === elementId)
+    if (!element) return
+    const fontSize = element.fontSize ?? 16
+    if (element.type === 'textbox') {
+      const { width: metricsWidth, height: metricsHeight, lineHeight } = computeTextMetrics(value, fontSize)
+      const padding = 16
+      const newWidth = Math.max(element.width ?? metricsWidth + padding, metricsWidth + padding)
+      const newHeight = Math.max(element.height ?? fontSize * 1.5 + padding, metricsHeight + padding)
+
+      onUpdateElement(elementId, {
+        text: value,
+        width: newWidth,
+        height: newHeight,
+        textBoxConfig: {
+          ...(element.textBoxConfig ?? { previewMode: 'full', fullText: '' }),
+          fullText: value,
+          lineHeight
+        }
+      })
+      return
+    }
+
+    const { width, height } = computeTextMetrics(value, fontSize)
+    onUpdateElement(elementId, {
+      text: value,
+      width,
+      height
+    })
+  }, [elements, computeTextMetrics, onUpdateElement])
+
+  const closeTextEditor = useCallback((commit: boolean) => {
+    if (!textEditor) return
+    const { elementId, value, initialValue } = textEditor
+    const trimmedValue = value.trim()
+    const targetElement = elements.find(el => el.id === elementId)
+    if (!targetElement) {
+      setTextEditor(null)
+      return
+    }
+
+    if (commit) {
+      if (trimmedValue === '') {
+        useEditorStore.getState().deleteElements([elementId])
+      } else {
+        const fontSize = targetElement.fontSize ?? 16
+        const { width, height } = computeTextMetrics(value, fontSize)
+        if (targetElement.text !== value || targetElement.width !== width || targetElement.height !== height) {
+          updateTextElementDimensions(elementId, value)
+        }
+      }
+    } else {
+      if (initialValue.trim() === '') {
+        useEditorStore.getState().deleteElements([elementId])
+      } else {
+        if (targetElement.text !== initialValue) {
+          updateTextElementDimensions(elementId, initialValue)
+        }
+      }
+    }
+    setTextEditor(null)
+  }, [textEditor, elements, computeTextMetrics, updateTextElementDimensions])
+
+  const handleTextEditorChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    if (!textEditor) return
+    const newValue = event.target.value
+    setTextEditor(prev => prev ? { ...prev, value: newValue } : prev)
+    const element = elements.find(el => el.id === textEditor.elementId)
+    if (element) {
+      const fontSize = element.fontSize ?? 16
+      let needsSceneUpdate = false
+      if (element.type === 'textbox') {
+        const { width: metricsWidth, height: metricsHeight, lineHeight } = computeTextMetrics(newValue, fontSize)
+        const padding = 16
+        const newWidth = Math.max(element.width ?? metricsWidth + padding, metricsWidth + padding)
+        const newHeight = Math.max(element.height ?? fontSize * 1.5 + padding, metricsHeight + padding)
+
+        useEditorStore.setState((state) => ({
+          elements: state.elements.map(el =>
+            el.id === textEditor.elementId
+              ? {
+                  ...el,
+                  text: newValue,
+                  width: newWidth,
+                  height: newHeight,
+                  textBoxConfig: {
+                    ...(el.textBoxConfig ?? { previewMode: 'full', fullText: '' }),
+                    fullText: newValue,
+                    lineHeight
+                  }
+                }
+              : el
+          )
+        }))
+        needsSceneUpdate = true
+      } else {
+        const { width, height } = computeTextMetrics(newValue, fontSize)
+        if (element.text !== newValue || element.width !== width || element.height !== height) {
+          useEditorStore.setState((state) => ({
+            elements: state.elements.map(el =>
+              el.id === textEditor.elementId
+                ? { ...el, text: newValue, width, height }
+                : el
+            )
+          }))
+          needsSceneUpdate = true
+        }
+      }
+
+      if (needsSceneUpdate) {
+        const { updateCurrentScene } = useEditorStore.getState()
+        updateCurrentScene()
+      }
+    }
+  }, [textEditor, elements, computeTextMetrics])
+
+  const handleTextEditorKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeTextEditor(false)
+    } else if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      closeTextEditor(true)
+    }
+  }, [closeTextEditor])
+
+  const handleTextEditorBlur = useCallback(() => {
+    closeTextEditor(true)
+  }, [closeTextEditor])
 
   // Get current properties from store
   const getCurrentProperties = useCallback(() => {
@@ -256,10 +526,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
       
       case 'text':
-        // Approximate text bounds
-        const textWidth = (element.text?.length || 0) * (element.fontSize || 16) * 0.6
-        const textHeight = element.fontSize || 16
-        return point.x >= x && point.x <= x + textWidth && point.y >= y - textHeight && point.y <= y
+        const fontSize = element.fontSize ?? 16
+        const metrics = computeTextMetrics(element.text || '', fontSize)
+        const textWidth = element.width ?? metrics.width
+        const textHeight = element.height ?? metrics.height
+        return point.x >= x && point.x <= x + textWidth && point.y >= y && point.y <= y + textHeight
       
       case 'textbox':
         // Textbox uses defined width and height
@@ -337,7 +608,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       default:
         return false
     }
-  }, [])
+  }, [computeTextMetrics])
 
   // Find element at point (optimized with zIndex priority)
   const getElementAtPoint = useCallback((point: Point): Element | null => {
@@ -473,9 +744,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   // Update cursor based on mouse position
   const updateCursor = useCallback((e: React.MouseEvent) => {
     if (isSpacePressed || isPanning) {
-      setCurrentCursor('grab')
-      return
-    }
+    setCurrentCursor('grab')
+    return
+  }
     
     if (isResizing) {
       setCurrentCursor('grabbing')
@@ -488,6 +759,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
     
+    if (selectedTool === 'text' && textEditor) {
+      setCurrentCursor('text')
+      return
+    }
+
     if (selectedTool !== 'select') {
       setCurrentCursor('crosshair')
       return
@@ -517,6 +793,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const hoveredElement = getElementAtPoint(canvasPoint)
     
     if (hoveredElement) {
+      setHoveredElementId(prev => (prev === hoveredElement.id ? prev : hoveredElement.id))
       // Enhanced feedback for hovering over elements
       if (selectedElements.includes(hoveredElement.id)) {
         setCurrentCursor('move') // Selected element ready to move
@@ -524,9 +801,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         setCurrentCursor('pointer') // Unselected element ready to select
       }
     } else {
+      if (hoveredElementId !== null) {
+        setHoveredElementId(null)
+      }
       setCurrentCursor('default')
     }
-  }, [isSpacePressed, isPanning, isResizing, draggedElements.length, selectedTool, selectedElements, elements, screenToCanvas, getHandleAtPoint, getResizeHandles, getElementAtPoint])
+  }, [isSpacePressed, isPanning, isResizing, draggedElements.length, selectedTool, selectedElements, elements, screenToCanvas, getHandleAtPoint, getResizeHandles, getElementAtPoint, hoveredElementId])
 
   // Check if element is within selection rectangle
   const isElementInSelection = useCallback((element: Element, start: Point, end: Point): boolean => {
@@ -541,7 +821,13 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       case 'rectangle':
       case 'text':
       case 'textbox':
-        return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
+        const fontSize = element.fontSize ?? 16
+        const metrics = type === 'text'
+          ? computeTextMetrics(element.text || '', fontSize)
+          : { width: width, height: height }
+        const effectiveWidth = type === 'text' ? (element.width ?? metrics.width) : width
+        const effectiveHeight = type === 'text' ? (element.height ?? metrics.height) : height
+        return x >= minX && y >= minY && x + effectiveWidth <= maxX && y + effectiveHeight <= maxY
       
       case 'circle':
       case 'actor':
@@ -574,7 +860,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       default:
         return false
     }
-  }, [])
+  }, [computeTextMetrics])
 
   // Detect alignment guides between elements
   const detectAlignmentGuides = useCallback((draggedElementIds: string[], currentPositions: { [id: string]: { x: number, y: number } }) => {
@@ -667,10 +953,28 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const canvasPoint = screenToCanvas(e.clientX, e.clientY)
     const clickedElement = getElementAtPoint(canvasPoint)
 
-    // Handle middle mouse button or space+drag for panning
-    if (e.button === 1 || (e.button === 0 && isSpacePressed)) {
+    if (selectedTool === 'text' && textEditor) {
+      closeTextEditor(true)
+    }
+
+    if (e.button === 0 && e.detail === 2 && clickedElement) {
+      const { isElementLocked } = useEditorStore.getState()
+      if ((clickedElement.type === 'text' || clickedElement.type === 'textbox') && !isElementLocked(clickedElement.id)) {
+        e.stopPropagation()
+        openTextEditor(clickedElement)
+        return
+      }
+    }
+
+    const isPanGesture =
+      e.button === 1 ||
+      (e.button === 0 && isSpacePressed) ||
+      (e.button === 2 && (e.ctrlKey || e.metaKey))
+
+    // Handle middle mouse button, space+drag or ctrl/meta + right click for panning
+    if (isPanGesture) {
       e.stopPropagation()
-      
+
       // Check if stage is configured and locked - prevent panning
       if (stageConfig && stageConfig.locked) {
         setTooltip({
@@ -815,6 +1119,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
     
+    if (selectedTool === 'text') {
+      pendingTextElementRef.current = true
+    }
     setIsDrawing(true)
     setStartPoint(canvasPoint)
     
@@ -830,9 +1137,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     if (selectedTool === 'pen') {
       newElement.points = [canvasPoint]
     } else if (selectedTool === 'text') {
-      newElement.text = 'Texto'
-      newElement.width = 100
-      newElement.height = properties.fontSize
+      const fontSize = properties.fontSize ?? 16
+      newElement.text = ''
+      newElement.width = fontSize * 3
+      newElement.height = fontSize * 1.2
     }
 
     setCurrentElement(newElement)
@@ -1371,28 +1679,32 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     setResizeStartBounds(null)
     setResizePreview(null)
     setTooltip(null)
+    setHoveredElementId(null)
   }, [isDrawing, currentElement, onAddElement, isSelecting, selectionStart, selectionEnd, getElementsInSelection, getGroupElements, selectedElements, onSelectElements, isResizing, resizePreview, elements, onUpdateElement])
 
   // Handle wheel for zoom and horizontal scroll
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    // Check if stage is configured and locked - prevent zoom and scroll
+  const handleWheel = useCallback((event: WheelEvent) => {
+    // Always block browser zoom/scroll when handling the gesture ourselves
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+    event.stopPropagation()
+    
+    // Check if stage is configured and locked - prevent viewport changes
     if (stageConfig && stageConfig.locked) {
-      e.preventDefault()
       return
     }
     
-    if (e.ctrlKey || e.metaKey) {
-      // Zoom with Ctrl+scroll
-      e.preventDefault()
-      
+    if (event.ctrlKey || event.metaKey) {
+      // Zoom with Ctrl / Cmd + scroll
       const canvas = canvasRef.current
       if (!canvas) return
       
       const rect = canvas.getBoundingClientRect()
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
+      const mouseX = event.clientX - rect.left
+      const mouseY = event.clientY - rect.top
       
-      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1
+      const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1
       const newZoom = Math.max(0.1, Math.min(5, viewport.zoom * zoomFactor))
       
       // Zoom towards mouse position
@@ -1405,12 +1717,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         y: newY,
         zoom: newZoom
       })
-    } else if (e.shiftKey) {
-      // Horizontal scroll with Shift+scroll
-      e.preventDefault()
-      
+    } else if (event.shiftKey) {
+      // Horizontal scroll with Shift + scroll
       const scrollSpeed = 50
-      const deltaX = e.deltaY > 0 ? -scrollSpeed : scrollSpeed
+      const deltaX = event.deltaY > 0 ? -scrollSpeed : scrollSpeed
       
       onUpdateViewport({
         ...viewport,
@@ -1419,7 +1729,92 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
   }, [viewport, onUpdateViewport, stageConfig])
 
+  // Attach wheel listener manually to ensure passive: false (required to block browser zoom)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const wheelListener = (event: WheelEvent) => handleWheel(event)
+    canvas.addEventListener('wheel', wheelListener, { passive: false })
+    
+    return () => {
+      canvas.removeEventListener('wheel', wheelListener)
+    }
+  }, [handleWheel])
+
   // Render function
+  const drawHoverOutline = useCallback((ctx: CanvasRenderingContext2D, element: Element, color: string) => {
+    ctx.save()
+    ctx.strokeStyle = color
+    ctx.lineWidth = 2 / viewport.zoom
+    ctx.setLineDash([4 / viewport.zoom, 4 / viewport.zoom])
+
+    const { x = 0, y = 0 } = element
+    const width = element.width ?? 0
+    const height = element.height ?? 0
+
+    switch (element.type) {
+      case 'text': {
+        const fontSize = element.fontSize ?? 16
+        const { width: textWidth, height: textHeight } = computeTextMetrics(element.text || '', fontSize)
+        const rectWidth = element.width ?? textWidth
+        const rectHeight = element.height ?? textHeight
+        ctx.strokeRect(x - 2, y - 2, rectWidth + 4, rectHeight + 4)
+        break
+      }
+      case 'textbox':
+      case 'rectangle':
+      case 'stage':
+      case 'object':
+        ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+        break
+      case 'circle':
+      case 'actor': {
+        const radius = Math.min(width, height) / 2
+        const centerX = x + radius
+        const centerY = y + radius
+        ctx.beginPath()
+        ctx.arc(centerX, centerY, radius + 2, 0, 2 * Math.PI)
+        ctx.stroke()
+        break
+      }
+      case 'line':
+      case 'arrow': {
+        ctx.beginPath()
+        ctx.moveTo(x, y)
+        ctx.lineTo(x + width, y + height)
+        ctx.stroke()
+        break
+      }
+      case 'path': {
+        if (element.pathData) {
+          try {
+            const path2D = new Path2D(element.pathData)
+            const pb = (element as any).pathBounds || { x, y, width, height }
+            const sx = pb.width ? ((element.width ?? pb.width) / pb.width) : 1
+            const sy = pb.height ? ((element.height ?? pb.height) / pb.height) : 1
+            ctx.save()
+            ctx.translate((element.x ?? 0) - pb.x, (element.y ?? 0) - pb.y)
+            ctx.scale(sx, sy)
+            ctx.stroke(path2D)
+            ctx.restore()
+            break
+          } catch {
+            ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+            break
+          }
+        }
+        ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+        break
+      }
+      default:
+        ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
+        break
+    }
+
+    ctx.restore()
+  }, [computeTextMetrics, viewport.zoom])
+
   const render = useCallback(() => {
     const canvas = canvasRef.current
     const container = containerRef.current
@@ -1533,8 +1928,15 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       ctx.restore()
     }
 
+    if (hoverPreviewEnabled && hoveredElementId) {
+      const hoveredElement = elements.find(el => el.id === hoveredElementId)
+      if (hoveredElement) {
+        drawHoverOutline(ctx, hoveredElement, hoverPreviewColor)
+      }
+    }
+
     ctx.restore()
-  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview])
+  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview, hoverPreviewEnabled, hoveredElementId, hoverPreviewColor, drawHoverOutline])
 
   // Draw grid
   const drawGrid = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {
@@ -1561,7 +1963,6 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
     ctx.stroke()
   }
-
   // Draw stage
   const drawStage = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {
     if (!stageConfig || !stageConfig.visible) return
@@ -1818,11 +2219,22 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         ctx.lineCap = 'butt'
         break
 
-      case 'text':
-        ctx.font = `${(element.fontSize || 16) / viewport.zoom}px Arial`
+      case 'text': {
+        const fontSize = element.fontSize ?? 16
+        const { lines, lineHeight } = computeTextMetrics(element.text || '', fontSize)
+        ctx.save()
+        ctx.globalAlpha = element.opacity ?? 1
+        ctx.font = `${fontSize}px Arial`
         ctx.fillStyle = element.strokeColor || '#000000'
-        ctx.fillText(element.text || '', x, y)
+        ctx.textAlign = 'left'
+        ctx.textBaseline = 'top'
+        lines.forEach((line, index) => {
+          const content = line === '' ? ' ' : line
+          ctx.fillText(content, x, y + index * lineHeight)
+        })
+        ctx.restore()
         break
+      }
 
       case 'textbox':
         // Draw textbox background
@@ -2218,8 +2630,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         break
     }
 
-    // Draw group indicator
-    if (isInGroup) {
+    // Draw group indicator somente quando o grupo NÃO está travado
+    if (isInGroup && !elementGroup?.locked) {
       ctx.strokeStyle = isWelded ? '#ff6b6b' : '#28a745'
       ctx.lineWidth = 1.5 / viewport.zoom
       ctx.setLineDash([3 / viewport.zoom, 3 / viewport.zoom])
@@ -2779,6 +3191,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        onContextMenu={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault()
+          }
+        }}
         onTouchStart={(e) => {
           e.preventDefault()
           const touch = e.touches[0]
@@ -2820,7 +3237,20 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           touchAction: 'none' // Prevent default touch behaviors
         }}
       />
-      
+
+      {textEditor && editingElement && textEditorStyle && (
+        <textarea
+          ref={textAreaRef}
+          value={textEditor.value}
+          onChange={handleTextEditorChange}
+          onKeyDown={handleTextEditorKeyDown}
+          onBlur={handleTextEditorBlur}
+          spellCheck={false}
+          style={textEditorStyle}
+          className="bg-transparent text-current"
+        />
+      )}
+
       {tooltip && (
         <div
           className="absolute bg-gray-800 text-white px-2 py-1 rounded text-sm pointer-events-none z-50"

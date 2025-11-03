@@ -11,7 +11,7 @@ import {
   Plus
 } from 'lucide-react'
 import { useParams } from 'next/navigation'
-import { Element } from '@/hooks/useEditorStore'
+import { Element, useEditorStore } from '@/hooks/useEditorStore'
 
 interface Actor {
   id: string
@@ -38,6 +38,7 @@ export function ActorsTab() {
   const { user } = useAuth()
   const params = useParams()
   const projectId = params.projectId as string
+  const { removeActorFromAllScenes } = useEditorStore()
   
   const [actors, setActors] = useState<Actor[]>([])
   const [loading, setLoading] = useState(true)
@@ -104,6 +105,9 @@ export function ActorsTab() {
         .eq('user_id', user.id)
       
       if (error) throw error
+      
+      // Remove elementos de ator de todas as cenas
+      removeActorFromAllScenes(actorId)
       
       await loadActors()
     } catch (err) {

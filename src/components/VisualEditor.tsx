@@ -39,8 +39,6 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     clearSelection,
     undo,
     redo,
-    canUndo,
-    canRedo,
     groupElements,
     ungroupElements,
     weldElements,
@@ -50,6 +48,8 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     bringForward,
     sendBackward,
     resetStore,
+    stageConfig,
+    initializeHistory,
     scenes,
     nextScene,
     previousScene,
@@ -67,12 +67,13 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
         viewport,
         scenes,
         currentSceneIndex: useEditorStore.getState().currentSceneIndex,
+        stageConfig,
         lastModified: new Date().toISOString()
       })
     } catch (error) {
       console.error('Erro ao salvar automaticamente:', error)
     }
-  }, [projectId, elements, groups, viewport, scenes])
+  }, [projectId, elements, groups, viewport, scenes, stageConfig])
 
   // Load project data on mount
   useEffect(() => {
@@ -86,19 +87,33 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
         const data = await loadProjectData(projectId)
         
         if (data) {
-          setElements(data.elements || [])
-          // Load groups if available
-          if (data.groups) {
-            const store = useEditorStore.getState()
-            store.groups = data.groups
-          }
-          // Load scenes if available
-          if (data.scenes) {
-            const store = useEditorStore.getState()
-            store.scenes = data.scenes
-            store.currentSceneIndex = data.currentSceneIndex || 0
-          }
+          const elements = data.elements || []
+          const groups = data.groups || []
+          const scenes = data.scenes || []
+          const currentSceneIndex = scenes.length > 0
+            ? (data.currentSceneIndex !== undefined ? data.currentSceneIndex : 0)
+            : -1
+          
+          setElements(elements)
+          useEditorStore.setState({
+            groups,
+            scenes,
+            currentSceneIndex,
+            stageConfig: data.stageConfig || null,
+          })
           setViewport(data.viewport || { x: 0, y: 0, zoom: 1 })
+          initializeHistory()
+        } else {
+          // No data found (new project) - ensure everything is clean
+          setElements([])
+          useEditorStore.setState({
+            groups: [],
+            scenes: [],
+            currentSceneIndex: -1,
+            stageConfig: null,
+          })
+          setViewport({ x: 0, y: 0, zoom: 1 })
+          initializeHistory()
         }
       } catch (error) {
         console.error('Erro ao carregar dados do projeto:', error)
@@ -108,7 +123,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     }
 
     loadData()
-  }, [projectId, setElements, setViewport, resetStore])
+  }, [projectId, setElements, setViewport, resetStore, initializeHistory])
 
   // Auto-save every 5 seconds
   useEffect(() => {

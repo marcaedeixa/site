@@ -7,6 +7,7 @@ import { getProject } from '@/lib/projects'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Save, Download, Undo, Redo } from 'lucide-react'
 import { VisualEditor } from '@/components/VisualEditor'
+import { useEditorStore } from '@/hooks/useEditorStore'
 
 interface Project {
   id: string
@@ -24,6 +25,12 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null)
 
   const projectId = params.projectId as string
+  
+  // Editor store functions
+  const undo = useEditorStore((state) => state.undo)
+  const redo = useEditorStore((state) => state.redo)
+  const canUndo = useEditorStore((state) => state.canUndo)
+  const canRedo = useEditorStore((state) => state.canRedo)
 
   useEffect(() => {
     if (!user || !projectId) return
@@ -105,10 +112,22 @@ export default function EditorPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={undo}
+              disabled={!canUndo}
+              title="Desfazer (Ctrl+Z)"
+            >
               <Undo className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm">
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={redo}
+              disabled={!canRedo}
+              title="Refazer (Ctrl+Y)"
+            >
               <Redo className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="sm">

@@ -17,8 +17,6 @@ import {
   Plus, 
   Settings,
   Eye,
-  EyeOff,
-  MousePointer,
   Move3D
 } from 'lucide-react'
 
@@ -30,7 +28,14 @@ interface TextBoxConfig {
 }
 
 export function ToolsTab() {
-  const { addElement, viewport } = useEditorStore()
+  const {
+    addElement,
+    viewport,
+    hoverPreviewEnabled,
+    hoverPreviewColor,
+    setHoverPreviewEnabled,
+    setHoverPreviewColor
+  } = useEditorStore()
   const [showTextBoxDialog, setShowTextBoxDialog] = useState(false)
   const [textBoxConfig, setTextBoxConfig] = useState<TextBoxConfig>({
     text: '',
@@ -38,6 +43,9 @@ export function ToolsTab() {
     fontSize: 16,
     previewMode: 'full'
   })
+  const [showHoverDialog, setShowHoverDialog] = useState(false)
+  const [hoverEnabledDraft, setHoverEnabledDraft] = useState(hoverPreviewEnabled)
+  const [hoverColorDraft, setHoverColorDraft] = useState(hoverPreviewColor)
 
   const handleAddTextBox = () => {
     if (!textBoxConfig.text.trim()) return
@@ -74,6 +82,60 @@ export function ToolsTab() {
       previewMode: 'full'
     })
     setShowTextBoxDialog(false)
+  }
+
+  const handleAddMovementArrow = () => {
+    if (typeof window === 'undefined') return
+
+    const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
+    const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
+
+    addElement({
+      type: 'arrow',
+      x: centerX - 80,
+      y: centerY,
+      width: 160,
+      height: 0,
+      strokeColor: '#2563eb',
+      fillColor: 'transparent',
+      strokeWidth: 4,
+      opacity: 1,
+      zIndex: 1200
+    } as any)
+  }
+
+  const handleAddPositionIndicator = () => {
+    if (typeof window === 'undefined') return
+
+    const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
+    const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
+    const size = 48
+
+    addElement({
+      type: 'circle',
+      x: centerX - size / 2,
+      y: centerY - size / 2,
+      width: size,
+      height: size,
+      strokeColor: '#f59e0b',
+      fillColor: 'transparent',
+      strokeWidth: 3,
+      strokeDasharray: '6,4',
+      opacity: 1,
+      zIndex: 1100
+    } as any)
+  }
+
+  const handleOpenHoverDialog = () => {
+    setHoverEnabledDraft(hoverPreviewEnabled)
+    setHoverColorDraft(hoverPreviewColor)
+    setShowHoverDialog(true)
+  }
+
+  const handleApplyHoverConfig = () => {
+    setHoverPreviewEnabled(hoverEnabledDraft)
+    setHoverPreviewColor(hoverColorDraft)
+    setShowHoverDialog(false)
   }
 
   const getPreviewText = (text: string, mode: string) => {
@@ -235,7 +297,7 @@ export function ToolsTab() {
               variant="outline" 
               className="w-full justify-start gap-2" 
               size="sm"
-              disabled
+              onClick={handleAddMovementArrow}
             >
               <ArrowRight className="h-4 w-4" />
               Adicionar Seta de Movimento
@@ -244,7 +306,7 @@ export function ToolsTab() {
               variant="outline" 
               className="w-full justify-start gap-2" 
               size="sm"
-              disabled
+              onClick={handleAddPositionIndicator}
             >
               <Move3D className="h-4 w-4" />
               Indicadores de Posição
@@ -256,16 +318,61 @@ export function ToolsTab() {
           {/* Configurações de Visualização (placeholder) */}
           <div className="space-y-2">
             <Label className="text-xs text-gray-600">Visualização</Label>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2" 
-              size="sm"
-              disabled
-            >
-              <Eye className="h-4 w-4" />
-              Configurar Hover
-            </Button>
+          <Button 
+            variant="outline" 
+            className="w-full justify-start gap-2" 
+            size="sm"
+            onClick={handleOpenHoverDialog}
+          >
+            <Eye className="h-4 w-4" />
+            Configurar Hover
+          </Button>
           </div>
+
+          <Dialog open={showHoverDialog} onOpenChange={setShowHoverDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Eye className="h-4 w-4" />
+                  Configurações de Hover
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Destaque ao passar o mouse</Label>
+                  <Button
+                    variant={hoverEnabledDraft ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setHoverEnabledDraft(prev => !prev)}
+                  >
+                    {hoverEnabledDraft ? 'Ativado' : 'Desativado'}
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs text-gray-600">Cor do destaque</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      type="color"
+                      value={hoverColorDraft}
+                      onChange={(event) => setHoverColorDraft(event.target.value)}
+                      className="h-10 w-16 p-1"
+                    />
+                    <span className="text-sm text-gray-600">{hoverColorDraft}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setShowHoverDialog(false)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleApplyHoverConfig}>
+                  Aplicar
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </CardContent>
       </Card>
     </div>

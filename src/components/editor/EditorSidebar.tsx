@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
+import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -12,12 +13,13 @@ import { Element, useEditorStore } from '@/hooks/useEditorStore'
 import { ActorsTab } from './ActorsTab'
 import { ObjectsTab } from './ObjectsTab'
 import { DeixaTab } from './DeixaTab'
+import { NotesTab } from './NotesTab'
 import { ToolsTab } from './ToolsTab'
 import { 
   Palette, Settings, Layers, Users, Box, Lock, Unlock, Theater, MessageSquare, MoreHorizontal,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Group, Ungroup,
-  GripVertical, ChevronRight
+  GripVertical, ChevronRight, FileText
 } from 'lucide-react'
 
 interface EditorSidebarProps {
@@ -67,7 +69,8 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     groupElements,
     ungroupElements,
     reorderElements,
-    selectElements
+    selectElements,
+    validateGeometricElements
   } = useEditorStore()
 
   // Get selected element (if only one is selected)
@@ -116,6 +119,29 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
       const element = elements.find(el => el.id === id)
       if (element?.type === 'text') {
         onUpdateElement(id, { fontSize: size })
+      } else if (element?.type === 'textbox') {
+        const padding = 16
+        const currentFont = element.fontSize ?? size
+        const ratio = currentFont ? size / currentFont : 1
+
+        const textSource = (element.textBoxConfig?.fullText ?? element.text ?? '').trim()
+        const fallbackWidth = Math.max(120, textSource.length * (currentFont * 0.6) + padding)
+        const baseWidth = element.width && element.width > 0 ? element.width : fallbackWidth
+        const newWidth = Math.max(120, baseWidth * ratio)
+
+        const lines = Math.max(1, textSource.split(/\r?\n/).length)
+        const lineHeight = size * 1.4
+        const newHeight = Math.max(size * 1.5 + padding, lines * lineHeight + padding)
+
+        onUpdateElement(id, {
+          fontSize: size,
+          width: newWidth,
+          height: newHeight,
+          textBoxConfig: {
+            ...(element.textBoxConfig ?? { previewMode: 'full', fullText: element.text || '' }),
+            fullText: textSource || element.text || ''
+          }
+        })
       }
     })
   }
@@ -125,6 +151,24 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
       const element = elements.find(el => el.id === id)
       if (element?.type === 'text') {
         onUpdateElement(id, { text })
+      } else if (element?.type === 'textbox') {
+        const fontSize = element.fontSize ?? 16
+        const lines = Math.max(1, text.split(/\r?\n/).length)
+        const lineHeight = fontSize * 1.4
+        const padding = 16
+        const textWidthEstimate = Math.max(fontSize * 2, text.split(/\r?\n/).reduce((max, line) => Math.max(max, line.length), 0) * (fontSize * 0.6))
+        const width = Math.max(element.width ?? textWidthEstimate + padding, textWidthEstimate + padding)
+        const height = Math.max(element.height ?? fontSize * 1.5 + padding, lines * lineHeight + padding)
+
+        onUpdateElement(id, {
+          text,
+          width,
+          height,
+          textBoxConfig: {
+            ...(element.textBoxConfig ?? { previewMode: 'full', fullText: '' }),
+            fullText: text
+          }
+        })
       }
     })
   }
@@ -134,8 +178,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
       const element = elements.find(el => el.id === id)
       if (element?.type === 'actor') {
         const updates: Partial<Element> = { [property]: value }
-        
-        // Update initials when name changes
+
         if (property === 'actorName') {
           const initials = value
             .split(' ')
@@ -144,7 +187,12 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
             .join('')
           updates.actorInitials = initials
         }
-        
+
+        if (property === 'actorInitials') {
+          const formatted = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3)
+          updates.actorInitials = formatted
+        }
+
         onUpdateElement(id, updates)
       }
     })
@@ -303,6 +351,9 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
           <TabsTrigger value="deixa" onClick={() => handleTabClick('deixa')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <MessageSquare className="h-4 w-4" />
           </TabsTrigger>
+          <TabsTrigger value="notes" onClick={() => handleTabClick('notes')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+            <FileText className="h-4 w-4" />
+          </TabsTrigger>
           <TabsTrigger value="tools" onClick={() => handleTabClick('tools')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <MoreHorizontal className="h-4 w-4" />
           </TabsTrigger>
@@ -384,15 +435,24 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                     )}
 
                     {/* Text Content */}
-                    {selectedElement?.type === 'text' && (
-                      <div>
+                    {selectedElement && (selectedElement.type === 'text' || selectedElement.type === 'textbox') && (
+                      <div className="space-y-1">
                         <Label className="text-xs">Texto</Label>
-                        <Input
-                          value={selectedElement.text || ''}
-                          onChange={(e) => handleTextChange(e.target.value)}
-                          className="h-8"
-                          placeholder="Digite o texto..."
-                        />
+                        {selectedElement.type === 'textbox' ? (
+                          <Textarea
+                            value={selectedElement.text || ''}
+                            onChange={(e) => handleTextChange(e.target.value)}
+                            className="min-h-[80px]"
+                            placeholder="Digite o conteúdo do texto..."
+                          />
+                        ) : (
+                          <Input
+                            value={selectedElement.text || ''}
+                            onChange={(e) => handleTextChange(e.target.value)}
+                            className="h-8"
+                            placeholder="Digite o texto..."
+                          />
+                        )}
                       </div>
                     )}
 
@@ -408,11 +468,21 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             placeholder="Nome do ator..."
                           />
                         </div>
+                        <div>
+                          <Label className="text-xs">Sigla</Label>
+                          <Input
+                            value={selectedElement.actorInitials || ''}
+                            onChange={(e) => handleActorPropertyChange('actorInitials', e.target.value)}
+                            className="h-8 uppercase"
+                            maxLength={3}
+                            placeholder="Ex: AB"
+                          />
+                        </div>
                       </div>
                     )}
 
                     {/* Font Size */}
-                    {selectedElement?.type === 'text' && (
+                    {selectedElement && (selectedElement.type === 'text' || selectedElement.type === 'textbox') && (
                       <div>
                         <Label className="text-xs mb-2 block">Tamanho da Fonte: {selectedElement.fontSize || fontSize}px</Label>
                         <Slider
@@ -674,22 +744,60 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {selectedElements.length >= 1 && (
-                  <>
-                    <Button
-                      onClick={() => createStage(selectedElements)}
-                      className="w-full"
-                      size="sm"
-                      variant="default"
-                    >
-                      <Theater className="h-4 w-4 mr-2" />
-                      Criar Palco
-                    </Button>
-                    <p className="text-xs text-gray-600">
-                      Agrupa e trava os elementos selecionados como base do palco
-                    </p>
-                  </>
-                )}
+                {selectedElements.length >= 1 && (() => {
+                  const validation = validateGeometricElements(selectedElements)
+                  const hasValidElements = validation.hasValidElements
+                  const invalidCount = validation.invalid.length
+                  const stageGroup = groups.find(g => g.name === 'Palco')
+                  const isStageLocked = !!stageGroup?.locked
+                  
+                  return (
+                    <>
+                      <Button
+                        onClick={() => createStage(selectedElements)}
+                        className="w-full"
+                        size="sm"
+                        variant={hasValidElements && !isStageLocked ? "default" : "outline"}
+                        disabled={!hasValidElements || isStageLocked}
+                      >
+                        <Theater className="h-4 w-4 mr-2" />
+                        Criar Palco
+                      </Button>
+                      {isStageLocked && (
+                        <p className="text-xs text-amber-600">
+                          ⚠ Palco travado: destrave para adicionar novos elementos ao palco
+                        </p>
+                      )}
+                      
+                      {hasValidElements && invalidCount === 0 && (
+                        <p className="text-xs text-green-600">
+                          ✓ {validation.valid.length} elemento(s) geométrico(s) selecionado(s)
+                        </p>
+                      )}
+                      
+                      {hasValidElements && invalidCount > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-green-600">
+                            ✓ {validation.valid.length} elemento(s) geométrico(s) válido(s)
+                          </p>
+                          <p className="text-xs text-amber-600">
+                            ⚠ {invalidCount} elemento(s) não geométrico(s) serão ignorados
+                          </p>
+                        </div>
+                      )}
+                      
+                      {!hasValidElements && (
+                        <p className="text-xs text-red-600">
+                          ✗ Apenas retângulos, círculos ou formas compostas podem formar o palco
+                        </p>
+                      )}
+                      
+                      <p className="text-xs text-gray-600">
+                        Agrupa e trava elementos geométricos e compostos como base do palco
+                      </p>
+                    </>
+                  )
+                })()}
                 
                 {selectedElements.length === 0 && (
                   <p className="text-xs text-gray-500 text-center py-2">
@@ -733,9 +841,9 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             className="h-6 w-6 p-0"
                           >
                             {isLocked ? (
-                              <Unlock className="h-3 w-3" />
-                            ) : (
                               <Lock className="h-3 w-3" />
+                            ) : (
+                              <Unlock className="h-3 w-3" />
                             )}
                           </Button>
                         </div>
@@ -883,6 +991,10 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
 
           <TabsContent value="deixa" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
             <DeixaTab />
+          </TabsContent>
+
+          <TabsContent value="notes" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+            <NotesTab />
           </TabsContent>
 
           <TabsContent value="tools" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
