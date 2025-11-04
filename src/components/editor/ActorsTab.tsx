@@ -24,6 +24,7 @@ interface Actor {
     shape?: 'circle' | 'square'
     size?: number
     icon?: string
+    initials?: string
   }
   default_speech_bubble?: {
     style?: 'rounded' | 'square' | 'thought'
@@ -167,74 +168,74 @@ export function ActorsTab() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 min-w-0">
-            {actors.map((actor) => (
-              <Card 
-                key={actor.id}
-                className="hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing relative min-w-0 overflow-hidden"
-                draggable={true}
-                onDragStart={(e) => {
-                  // Gerar iniciais do nome do ator
-                  const actorInitials = actor.name
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase())
-                    .slice(0, 2)
-                    .join('')
-                  
-                  e.dataTransfer.setData('application/json', JSON.stringify({
-                    type: 'actor',
-                    actorId: actor.id,
-                    actorName: actor.name,
-                    actorInitials: actorInitials,
-                    actorColor: actor.color || '#3b82f6',
-                    actorShape: actor.appearance_config?.shape || 'circle',
-                    actorSize: actor.appearance_config?.size || 60,
-                    actorNotes: actor.notes || '',
-                    fillColor: actor.color || '#3b82f6',
-                    strokeColor: '#ffffff',
-                    bubbleStyle: actor.default_speech_bubble?.style || 'rounded',
-                    bubbleColor: actor.default_speech_bubble?.color || '#ffffff',
-                    bubbleTextColor: actor.default_speech_bubble?.textColor || '#000000'
-                  }))
-                  e.dataTransfer.effectAllowed = 'copy'
-                }}
-                onDragEnd={(e) => {
-                  // Reset cursor
-                  e.currentTarget.style.cursor = 'grab'
-                }}
-              >
-                <CardContent className="p-2">
-                  <div className="flex flex-col items-center text-center">
-                    {/* Avatar do ator */}
-                    <div 
-                      className={`w-8 h-8 flex items-center justify-center text-white font-semibold text-xs mb-1 ${
-                        actor.appearance_config?.shape === 'square' ? 'rounded-md' : 'rounded-full'
-                      }`}
-                      style={{ backgroundColor: actor.color || '#3b82f6' }}
-                    >
-                      {actor.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            {actors.map((actor) => {
+              const storedInitials = actor.appearance_config?.initials?.trim() || ''
+              const fallbackInitials = actor.name
+                .split(' ')
+                .filter(Boolean)
+                .map(word => word.charAt(0).toUpperCase())
+                .slice(0, 2)
+                .join('')
+              const actorInitials = (storedInitials || fallbackInitials || '?')
+                .toUpperCase()
+                .slice(0, 3)
+
+              return (
+                <Card 
+                  key={actor.id}
+                  className="hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing relative min-w-0 overflow-hidden"
+                  draggable={true}
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('application/json', JSON.stringify({
+                      type: 'actor',
+                      actorId: actor.id,
+                      actorName: actor.name,
+                      actorInitials: actorInitials,
+                      actorColor: actor.color || '#3b82f6',
+                      actorShape: actor.appearance_config?.shape || 'circle',
+                      actorSize: actor.appearance_config?.size || 60,
+                      actorNotes: actor.notes || '',
+                      fillColor: actor.color || '#3b82f6',
+                      strokeColor: '#ffffff',
+                      bubbleStyle: actor.default_speech_bubble?.style || 'rounded',
+                      bubbleColor: actor.default_speech_bubble?.color || '#ffffff',
+                      bubbleTextColor: actor.default_speech_bubble?.textColor || '#000000'
+                    }))
+                    e.dataTransfer.effectAllowed = 'copy'
+                  }}
+                  onDragEnd={(e) => {
+                    e.currentTarget.style.cursor = 'grab'
+                  }}
+                >
+                  <CardContent className="p-2">
+                    <div className="flex flex-col items-center text-center">
+                      <div 
+                        className={`w-8 h-8 flex items-center justify-center text-white font-semibold text-xs mb-1 ${
+                          actor.appearance_config?.shape === 'square' ? 'rounded-md' : 'rounded-full'
+                        }`}
+                        style={{ backgroundColor: actor.color || '#3b82f6' }}
+                      >
+                        {actorInitials}
+                      </div>
+                      <h4 className="text-xs font-medium text-gray-900 truncate w-full">{actor.name}</h4>
                     </div>
-                    
-                    {/* Nome do ator */}
-                    <h4 className="text-xs font-medium text-gray-900 truncate w-full">{actor.name}</h4>
-                  </div>
-                  
-                  {/* Botão de excluir - posicionado no canto superior direito */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteActor(actor.id)}
-                    disabled={deletingActorId === actor.id}
-                    className="absolute top-1 right-1 text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
-                  >
-                    {deletingActorId === actor.id ? (
-                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteActor(actor.id)}
+                      disabled={deletingActorId === actor.id}
+                      className="absolute top-1 right-1 text-red-600 hover:text-red-700 hover:bg-red-50 h-6 w-6 p-0"
+                    >
+                      {deletingActorId === actor.id ? (
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>

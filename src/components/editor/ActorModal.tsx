@@ -98,7 +98,8 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         notes: null,
         appearance_config: {
           shape: 'circle',
-          size: 50
+          size: 50,
+          initials: formData.actorInitials.trim()
         },
         default_speech_bubble: {
           style: 'rounded',

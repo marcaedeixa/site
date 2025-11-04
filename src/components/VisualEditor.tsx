@@ -6,6 +6,7 @@ import { EditorTopToolbar } from './editor/EditorTopToolbar'
 import { EditorCanvas } from './editor/EditorCanvas'
 import { EditorSidebar } from './editor/EditorSidebar'
 import { EditorBottomBar } from './editor/EditorBottomBar'
+import { SceneNotesPanel } from './editor/SceneNotesPanel'
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { saveProjectData, loadProjectData } from '@/lib/projectData'
 import { performBooleanOperation, uniteMultipleShapes, convertElementToShape } from '@/lib/svgUtils'
@@ -14,7 +15,7 @@ interface VisualEditorProps {
   projectId: string
   project: {
     id: string
-    title: string
+    name: string
     description: string
   }
 }
@@ -476,7 +477,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       />
 
       {/* Layout principal com toolbar vertical, canvas e sidebar */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex overflow-hidden">
         {/* Toolbar à esquerda na vertical */}
         <EditorToolbar 
           selectedTool={selectedTool}
@@ -493,7 +494,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
         {/* Canvas Container no centro */}
         <div 
           ref={containerRef}
-          className="flex-1 relative overflow-hidden bg-white"
+          className="flex-1 relative bg-white overflow-hidden pb-[320px]"
         >
           <EditorCanvas
             ref={canvasRef}
@@ -508,17 +509,25 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
             onClearSelection={clearSelection}
             onUpdateViewport={setViewport}
           />
-
-          {/* Sidebar à direita (overlay absoluto para não empurrar conteúdo) */}
-          <EditorSidebar 
-            selectedElements={selectedElements}
-            onUpdateElement={updateElement}
-          />
         </div>
+
+        <EditorSidebar 
+          selectedElements={selectedElements}
+          onUpdateElement={updateElement}
+        />
       </div>
 
-      {/* Barra inferior com cenas - posição absoluta fixa */}
-      {!isFullscreenSlideshow && <EditorBottomBar />}
+      {/* Painéis inferiores */}
+      {!isFullscreenSlideshow && (
+        <div className="fixed inset-x-0 bottom-0 z-50 pointer-events-none">
+          <div className="pointer-events-auto">
+            <SceneNotesPanel />
+          </div>
+          <div className="pointer-events-auto">
+            <EditorBottomBar />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -14,7 +14,7 @@ interface EditorCanvasProps {
   selectedTool: Tool
   viewport: Viewport
   onAddElement: (element: Omit<Element, 'id'>) => void
-  onUpdateElement: (id: string, updates: Partial<Element>) => void
+  onUpdateElement: (id: string, updates: Partial<Element>, options?: { commitHistory?: boolean }) => void
   onSelectElements: (ids: string[]) => void
   onClearSelection: () => void
   onUpdateViewport: (viewport: Viewport) => void
@@ -219,7 +219,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   useEffect(() => {
     if (pendingTextElementRef.current) {
       const previousIds = new Set(previousElementsRef.current.map(el => el.id))
-      const newTextElement = elements.find(el => !previousIds.has(el.id) && el.type === 'text')
+      const newTextElement = elements.find(el => !previousIds.has(el.id) && (el.type === 'text' || el.type === 'textbox'))
       if (newTextElement) {
         pendingTextElementRef.current = false
         openTextEditor(newTextElement)
@@ -759,7 +759,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
     
-    if (selectedTool === 'text' && textEditor) {
+    if ((selectedTool === 'text' || selectedTool === 'textbox') && textEditor) {
       setCurrentCursor('text')
       return
     }
@@ -953,7 +953,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const canvasPoint = screenToCanvas(e.clientX, e.clientY)
     const clickedElement = getElementAtPoint(canvasPoint)
 
-    if (selectedTool === 'text' && textEditor) {
+    if ((selectedTool === 'text' || selectedTool === 'textbox') && textEditor) {
       closeTextEditor(true)
     }
 
@@ -1119,7 +1119,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
     
-    if (selectedTool === 'text') {
+    if (selectedTool === 'text' || selectedTool === 'textbox') {
       pendingTextElementRef.current = true
     }
     setIsDrawing(true)
@@ -1127,8 +1127,17 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     
     const properties = getCurrentProperties()
     
+    let elementType: Element['type']
+    if (selectedTool === 'pen') {
+      elementType = 'path'
+    } else if (selectedTool === 'textbox') {
+      elementType = 'textbox'
+    } else {
+      elementType = selectedTool as Element['type']
+    }
+
     const newElement: Partial<Element> = {
-      type: selectedTool === 'pen' ? 'path' : selectedTool as 'rectangle' | 'circle' | 'line' | 'arrow' | 'text' | 'path',
+      type: elementType,
       x: canvasPoint.x,
       y: canvasPoint.y,
       ...properties
@@ -1141,6 +1150,18 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       newElement.text = ''
       newElement.width = fontSize * 3
       newElement.height = fontSize * 1.2
+    } else if (selectedTool === 'textbox') {
+      const fontSize = properties.fontSize ?? 16
+      const defaultWidth = 220
+      const defaultHeight = fontSize * 2
+      newElement.text = ''
+      newElement.width = defaultWidth
+      newElement.height = defaultHeight
+      newElement.textBoxConfig = {
+        previewMode: 'full',
+        fullText: ''
+      }
+      newElement.fillColor = '#ffffff'
     }
 
     setCurrentElement(newElement)
@@ -1209,7 +1230,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
               const radiusValue = Math.max(0, Math.min(Math.abs(deltaX + deltaY) / 2, maxRadius))
               
               // Apply the border radius immediately
-              onUpdateElement(element.id, { borderRadius: radiusValue })
+              onUpdateElement(element.id, { borderRadius: radiusValue }, { commitHistory: false })
               
               // Show tooltip for border radius
               setTooltip({
@@ -1264,7 +1285,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
               onUpdateElement(element.id, { 
                 curveOffsetX: curveOffsetX,
                 curveOffsetY: curveOffsetY
-              })
+              }, { commitHistory: false })
               
               // Show tooltip for curve
               setTooltip({
@@ -1347,7 +1368,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
         
         // Apply changes directly during resize for immediate feedback
-         onUpdateElement(element.id, newBounds)
+        onUpdateElement(element.id, newBounds, { commitHistory: false })
          
          // Also update preview for visual feedback
          setResizePreview({
@@ -1509,12 +1530,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
                 y: newY,
                 circleX: newCircleX,
                 circleY: newCircleY
-              })
+              }, { commitHistory: false })
             } else {
               onUpdateElement(elementId, {
                 x: newX,
                 y: newY
-              })
+              }, { commitHistory: false })
             }
           }
         })
@@ -1570,6 +1591,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       switch (selectedTool) {
         case 'rectangle':
         case 'circle':
+        case 'textbox':
           updatedElement.width = Math.abs(canvasPoint.x - startPoint.x)
           updatedElement.height = Math.abs(canvasPoint.y - startPoint.y)
           updatedElement.x = Math.min(startPoint.x, canvasPoint.x)
@@ -1595,6 +1617,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
+    const hadDragging = draggedElements.length > 0
     // Handle selection rectangle completion
     if (isSelecting && selectionStart && selectionEnd) {
       const selectedIds = getElementsInSelection(selectionStart, selectionEnd)
@@ -1625,6 +1648,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return
     }
     
+    const shouldSwitchToSelect = isDrawing && currentElement && !['select', 'pen', 'eraser'].includes(selectedTool)
+
     if (isDrawing && currentElement) {
       onAddElement(currentElement as Omit<Element, 'id'>)
     }
@@ -1680,7 +1705,17 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     setResizePreview(null)
     setTooltip(null)
     setHoveredElementId(null)
-  }, [isDrawing, currentElement, onAddElement, isSelecting, selectionStart, selectionEnd, getElementsInSelection, getGroupElements, selectedElements, onSelectElements, isResizing, resizePreview, elements, onUpdateElement])
+
+    if (hadDragging) {
+      const { saveToHistory } = useEditorStore.getState()
+      saveToHistory()
+    }
+    
+    if (shouldSwitchToSelect) {
+      const { setSelectedTool } = useEditorStore.getState()
+      setSelectedTool('select')
+    }
+  }, [isDrawing, currentElement, onAddElement, isSelecting, selectionStart, selectionEnd, getElementsInSelection, getGroupElements, selectedElements, onSelectElements, isResizing, resizePreview, elements, onUpdateElement, draggedElements, selectedTool])
 
   // Handle wheel for zoom and horizontal scroll
   const handleWheel = useCallback((event: WheelEvent) => {
@@ -2249,7 +2284,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         ctx.strokeRect(x, y, width, height)
         
         // Draw text content based on preview mode
-        if (element.text) {
+        const baseText = element.text ?? element.textBoxConfig?.fullText ?? ''
+
+        if (baseText) {
           ctx.save()
           ctx.font = `${(element.fontSize || 14) / viewport.zoom}px Arial`
           ctx.fillStyle = element.strokeColor || '#000000'
@@ -2262,7 +2299,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           const textWidth = width - (padding * 2)
           const textHeight = height - (padding * 2)
           
-          let displayText = element.text
+          let displayText = baseText
           const previewMode = element.textBoxConfig?.previewMode || 'full'
           
           if (previewMode !== 'full') {

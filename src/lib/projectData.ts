@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client'
 import { Element, Viewport, Group, Scene, StageConfig } from '@/hooks/useEditorStore'
+import { zipSync } from 'fflate'
 
 export interface ProjectData {
   elements: Element[]
@@ -123,6 +124,9 @@ export async function exportProjectData(projectId: string, format: 'json' | 'svg
       return generateSVG(elementsToExport, activeStageConfig)
     
     case 'png':
+      if (sceneIndex === undefined && data.scenes && data.scenes.length > 1) {
+        return await exportAllScenesAsZip(data)
+      }
       return generatePNG(elementsToExport, activeStageConfig)
     
     default:
@@ -160,6 +164,17 @@ function sanitizeBounds(bounds: Bounds): Bounds {
   }
   
   return { minX, minY, maxX, maxY }
+}
+
+function sanitizeFileName(name: string): string {
+  const normalized = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+
+  return normalized || 'cena'
 }
 
 function getElementBounds(element: Element): Bounds | null {
@@ -794,6 +809,41 @@ function generatePNG(elements: Element[], stageConfig: StageConfig | null): Prom
       }
     }, 'image/png')
   })
+}
+
+async function exportAllScenesAsZip(projectData: ProjectData): Promise<Blob> {
+  const files: Record<string, Uint8Array> = {}
+
+  const addBlobToZip = async (filename: string, blob: Blob) => {
+    const buffer = await blob.arrayBuffer()
+    files[filename] = new Uint8Array(buffer)
+  }
+
+  if (projectData.elements && projectData.elements.length > 0) {
+    const projectBlob = await generatePNG(
+      projectData.elements,
+      projectData.stageConfig ?? null
+    )
+    await addBlobToZip('projeto-atual.png', projectBlob)
+  }
+
+  const scenes = projectData.scenes ?? []
+
+  await Promise.all(scenes.map(async (scene, index) => {
+    const elements = scene.elements ?? []
+    const stage = scene.stageConfig ?? projectData.stageConfig ?? null
+    const blob = await generatePNG(elements, stage)
+    const safeName = sanitizeFileName(scene.name || `Cena_${index + 1}`)
+    const fileName = `${String(index + 1).padStart(2, '0')}-${safeName}.png`
+    await addBlobToZip(fileName, blob)
+  }))
+
+  if (Object.keys(files).length === 0) {
+    return new Blob([], { type: 'application/zip' })
+  }
+
+  const zipped = zipSync(files, { level: 6 })
+  return new Blob([zipped], { type: 'application/zip' })
 }
 
 function drawStageOnContext(ctx: CanvasRenderingContext2D, stageConfig: StageConfig) {

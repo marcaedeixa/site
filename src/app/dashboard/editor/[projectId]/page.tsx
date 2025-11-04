@@ -5,13 +5,13 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { getProject } from '@/lib/projects'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, Download, Undo, Redo } from 'lucide-react'
+import { ArrowLeft, Undo, Redo } from 'lucide-react'
 import { VisualEditor } from '@/components/VisualEditor'
 import { useEditorStore } from '@/hooks/useEditorStore'
 
 interface Project {
   id: string
-  title: string
+  name: string
   description: string
   [key: string]: string | number | boolean | null | undefined
 }
@@ -103,11 +103,13 @@ export default function EditorPage() {
             
             <div>
               <h1 className="text-lg font-semibold text-gray-900">
-                {project.title}
+                {project.name}
               </h1>
-              <p className="text-sm text-gray-500">
-                {project.description}
-              </p>
+              {project.description && (
+                <p className="text-sm text-gray-500">
+                  {project.description}
+                </p>
+              )}
             </div>
           </div>
 
@@ -129,14 +131,6 @@ export default function EditorPage() {
               title="Refazer (Ctrl+Y)"
             >
               <Redo className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="sm">
-              <Save className="h-4 w-4 mr-2" />
-              Salvar
-            </Button>
-            <Button variant="ghost" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Exportar
             </Button>
           </div>
         </div>

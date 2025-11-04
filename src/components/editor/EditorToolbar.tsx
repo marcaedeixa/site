@@ -28,7 +28,8 @@ import {
   Plus,
   Scissors,
   Merge,
-  XCircle
+  XCircle,
+  FileText
 } from 'lucide-react'
 import { Tool, useEditorStore } from '@/hooks/useEditorStore'
 import { cn } from '@/lib/utils'
@@ -53,6 +54,7 @@ const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>
   { id: 'line', icon: Minus, label: 'Linha', shortcut: 'L' },
   { id: 'arrow', icon: ArrowRight, label: 'Seta', shortcut: 'A' },
   { id: 'text', icon: Type, label: 'Texto', shortcut: 'T' },
+  { id: 'textbox', icon: FileText, label: 'Caixa de Texto', shortcut: 'B' },
   { id: 'pen', icon: PenTool, label: 'Caneta', shortcut: 'P' },
   { id: 'eraser', icon: Eraser, label: 'Borracha', shortcut: 'E' },
 ]
@@ -81,23 +83,25 @@ export function EditorToolbar({
       
       const data = await exportProjectData(projectId, format)
       
+      const isZip = data instanceof Blob && data.type === 'application/zip'
+      const extension = isZip ? 'zip' : format
+      const downloadBaseName = isZip ? 'projeto-cenas' : 'projeto'
+
       if (typeof data === 'string') {
-        // JSON or SVG
         const blob = new Blob([data], { 
           type: format === 'json' ? 'application/json' : 'image/svg+xml' 
         })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `projeto.${format}`
+        a.download = `${downloadBaseName}.${extension}`
         a.click()
         URL.revokeObjectURL(url)
       } else {
-        // PNG Blob
         const url = URL.createObjectURL(data)
         const a = document.createElement('a')
         a.href = url
-        a.download = `projeto.${format}`
+        a.download = `${downloadBaseName}.${extension}`
         a.click()
         URL.revokeObjectURL(url)
       }

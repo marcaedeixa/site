@@ -24,7 +24,7 @@ import {
 
 interface EditorSidebarProps {
   selectedElements: string[]
-  onUpdateElement: (id: string, updates: Partial<Element>) => void
+  onUpdateElement: (id: string, updates: Partial<Element>, options?: { commitHistory?: boolean }) => void
 }
 
 const colorPresets = [
@@ -329,10 +329,10 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   // Sidebar agora é overlay absoluto; não precisa mais de largura dinâmica do container
 
   return (
-    <div className="absolute inset-y-0 right-0 z-20 flex">
-      <Tabs value={activeTab} className="flex">
-        {/* Coluna de ícones (direita) */}
-        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-l bg-gray-50">
+    <div className="h-full flex border-l border-gray-200 bg-white shadow-sm min-w-[64px]">
+      <Tabs value={activeTab} className="flex w-full">
+        {/* Coluna de ícones */}
+        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50">
           <TabsTrigger value="properties" onClick={() => handleTabClick('properties')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Settings className="h-4 w-4" />
           </TabsTrigger>
@@ -359,8 +359,8 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
           </TabsTrigger>
         </TabsList>
 
-        {/* Área de conteúdo das abas (retrátil) - overlay absoluto não empurra canvas */}
-        <div className={`${isCollapsed ? 'hidden' : 'block'} w-80 h-full border-l bg-white p-3 overflow-y-hidden relative`}>
+        {/* Área de conteúdo das abas (retrátil) */}
+        <div className={`${isCollapsed ? 'hidden' : 'flex-1'} h-full bg-white p-3 overflow-y-hidden relative min-w-[260px] max-w-[360px]`}>
           {/* Botão para recolher o painel */}
           <Button 
             variant="ghost" 

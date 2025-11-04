@@ -236,23 +236,25 @@ export function EditorTopToolbar({
         fileName = `${scenes[sceneIndex].name.replace(/[^a-zA-Z0-9]/g, '_')}`
       }
       
+      const isZip = data instanceof Blob && data.type === 'application/zip'
+      const extension = isZip ? 'zip' : format
+      const downloadBaseName = isZip ? `${fileName}-cenas` : fileName
+
       if (typeof data === 'string') {
-        // JSON or SVG
         const blob = new Blob([data], { 
           type: format === 'json' ? 'application/json' : 'image/svg+xml' 
         })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${fileName}.${format}`
+        a.download = `${downloadBaseName}.${extension}`
         a.click()
         URL.revokeObjectURL(url)
       } else {
-        // PNG Blob
         const url = URL.createObjectURL(data)
         const a = document.createElement('a')
         a.href = url
-        a.download = `${fileName}.${format}`
+        a.download = `${downloadBaseName}.${extension}`
         a.click()
         URL.revokeObjectURL(url)
       }

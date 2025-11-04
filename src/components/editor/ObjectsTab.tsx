@@ -11,7 +11,7 @@ import {
   Plus
 } from 'lucide-react'
 import { useParams } from 'next/navigation'
-import { Element } from '@/hooks/useEditorStore'
+import { Element, useEditorStore } from '@/hooks/useEditorStore'
 
 interface ObjectItem {
   id: string
@@ -36,6 +36,7 @@ export function ObjectsTab() {
   const { user } = useAuth()
   const params = useParams()
   const projectId = params.projectId as string
+  const { removeObjectFromAllScenes } = useEditorStore()
   
   const [objects, setObjects] = useState<ObjectItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -60,6 +61,7 @@ export function ObjectsTab() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
+      removeObjectFromAllScenes(objectId)
       
       setObjects(data || [])
     } catch (err) {

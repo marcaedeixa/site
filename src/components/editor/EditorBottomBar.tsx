@@ -104,7 +104,7 @@ export function EditorBottomBar() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg transition-all duration-300 z-50">
+    <div className="bg-white border-t border-gray-200 shadow-lg transition-all duration-300 rounded-t-md overflow-hidden">
       {/* Barra de controle sempre visível */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50">
         <div className="flex items-center gap-4">

@@ -13,11 +13,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { 
   Type, 
-  ArrowRight, 
   Plus, 
   Settings,
-  Eye,
-  Move3D
+  Eye
 } from 'lucide-react'
 
 interface TextBoxConfig {
@@ -82,48 +80,6 @@ export function ToolsTab() {
       previewMode: 'full'
     })
     setShowTextBoxDialog(false)
-  }
-
-  const handleAddMovementArrow = () => {
-    if (typeof window === 'undefined') return
-
-    const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
-    const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
-
-    addElement({
-      type: 'arrow',
-      x: centerX - 80,
-      y: centerY,
-      width: 160,
-      height: 0,
-      strokeColor: '#2563eb',
-      fillColor: 'transparent',
-      strokeWidth: 4,
-      opacity: 1,
-      zIndex: 1200
-    } as any)
-  }
-
-  const handleAddPositionIndicator = () => {
-    if (typeof window === 'undefined') return
-
-    const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
-    const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
-    const size = 48
-
-    addElement({
-      type: 'circle',
-      x: centerX - size / 2,
-      y: centerY - size / 2,
-      width: size,
-      height: size,
-      strokeColor: '#f59e0b',
-      fillColor: 'transparent',
-      strokeWidth: 3,
-      strokeDasharray: '6,4',
-      opacity: 1,
-      zIndex: 1100
-    } as any)
   }
 
   const handleOpenHoverDialog = () => {
@@ -287,34 +243,6 @@ export function ToolsTab() {
               </div>
             </DialogContent>
           </Dialog>
-
-          <Separator />
-
-          {/* Ferramentas de Movimento (placeholder para futuras funcionalidades) */}
-          <div className="space-y-2">
-            <Label className="text-xs text-gray-600">Ferramentas de Movimento</Label>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2" 
-              size="sm"
-              onClick={handleAddMovementArrow}
-            >
-              <ArrowRight className="h-4 w-4" />
-              Adicionar Seta de Movimento
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-2" 
-              size="sm"
-              onClick={handleAddPositionIndicator}
-            >
-              <Move3D className="h-4 w-4" />
-              Indicadores de Posição
-            </Button>
-          </div>
-
-          <Separator />
-
           {/* Configurações de Visualização (placeholder) */}
           <div className="space-y-2">
             <Label className="text-xs text-gray-600">Visualização</Label>

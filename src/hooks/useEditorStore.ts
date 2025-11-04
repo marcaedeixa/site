@@ -8,6 +8,7 @@ export type Tool =
   | 'line'
   | 'arrow'
   | 'text'
+  | 'textbox'
   | 'pen'
   | 'eraser'
 
@@ -172,7 +173,7 @@ interface EditorStore {
   
   // Element operations
   addElement: (element: Omit<Element, 'id'>) => void
-  updateElement: (id: string, updates: Partial<Element>) => void
+  updateElement: (id: string, updates: Partial<Element>, options?: { commitHistory?: boolean }) => void
   deleteElements: (ids: string[]) => void
   duplicateElements: (ids: string[]) => void
   
@@ -260,6 +261,7 @@ interface EditorStore {
   
   // Actor operations
   removeActorFromAllScenes: (actorId: string) => void
+  removeObjectFromAllScenes: (objectId: string) => void
   
   // Alignment operations
   alignElementsLeft: (elementIds: string[]) => void
@@ -378,7 +380,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().updateCurrentScene()
   },
   
-  updateElement: (id, updates) => {
+  updateElement: (id, updates, options: { commitHistory?: boolean } = {}) => {
+    const { commitHistory = true } = options
     let stageAffected = false
 
     set((state) => {
@@ -417,7 +420,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return { elements: updatedElements }
     })
     
-    get().saveToHistory()
+    if (commitHistory) {
+      get().saveToHistory()
+    }
     get().updateCurrentScene()
 
     if (stageAffected) {
@@ -1479,6 +1484,35 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectedElements: updatedSelectedElements
       }
     })
+  },
+
+  removeObjectFromAllScenes: (objectId) => {
+    set((state) => {
+      const updatedScenes = state.scenes.map(scene => ({
+        ...scene,
+        elements: scene.elements.filter(element => 
+          !(element.type === 'object' && element.objectId === objectId)
+        )
+      }))
+
+      const updatedElements = state.elements.filter(element => 
+        !(element.type === 'object' && element.objectId === objectId)
+      )
+
+      const updatedSelected = state.selectedElements.filter(elementId => {
+        const element = state.elements.find(el => el.id === elementId)
+        return !(element?.type === 'object' && element?.objectId === objectId)
+      })
+
+      return {
+        scenes: updatedScenes,
+        elements: updatedElements,
+        selectedElements: updatedSelected
+      }
+    })
+    
+    const { updateCurrentScene } = get()
+    updateCurrentScene()
   },
   
   // Alignment operations
