@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Element } from '@/hooks/useEditorStore'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/hooks/useAuth.tsx'
+import { useAuth } from '@/hooks/useAuth'
 import { useParams } from 'next/navigation'
 
 interface ObjectModalProps {

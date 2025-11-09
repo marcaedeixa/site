@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/hooks/useAuth.tsx'
+import { useAuth } from '@/hooks/useAuth'
 import { 
   Trash2, 
   User,
@@ -178,7 +178,8 @@ export function ActorsTab() {
                 .join('')
               const actorInitials = (storedInitials || fallbackInitials || '?')
                 .toUpperCase()
-                .slice(0, 3)
+                .replace(/[^A-Z0-9]/g, '')
+                .slice(0, 2) || '?'
 
               return (
                 <Card 

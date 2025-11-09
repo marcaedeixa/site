@@ -62,6 +62,7 @@ export interface Element {
   objectInitials?: string
   objectNotes?: string
   objectShape?: 'triangle' | 'square' | 'hexagon'
+  objectId?: string
   strokeDasharray?: string
   // Line/Arrow specific properties
   curveOffsetX?: number
@@ -433,15 +434,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteElements: (ids) => {
     const { elements, groups } = get()
     const stageGroup = groups.find(group => group.name === 'Palco')
+    const isStageLocked = stageGroup?.locked ?? false
 
     const protectedIds = new Set(
       elements
-        .filter(el => ids.includes(el.id) && (el.type === 'stage' || (stageGroup && stageGroup.elementIds.includes(el.id))))
+        .filter(el => {
+          const isStageElement = el.type === 'stage' || (stageGroup && stageGroup.elementIds.includes(el.id))
+          return ids.includes(el.id) && isStageElement && isStageLocked
+        })
         .map(el => el.id)
     )
 
     if (protectedIds.size > 0) {
-      console.warn('Elementos do palco não podem ser removidos diretamente.')
+      console.warn('Destrave o palco para remover ou editar seus elementos.')
     }
 
     const allowedIds = ids.filter(id => !protectedIds.has(id))
@@ -993,6 +998,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   // Scene operations
   addScene: (name) => {
     const { elements, groups, viewport, stageConfig, scenes } = get()
+    const hasStageDefined = Boolean(stageConfig) || groups.some(group => group.name === 'Palco')
+
+    if (!hasStageDefined) {
+      alert('Crie ou configure um palco antes de adicionar cenas. Assim garantimos que todas as cenas compartilhem a mesma base.')
+      return
+    }
     
     const newScene: Scene = {
       id: nanoid(),
@@ -1066,6 +1077,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })
 
     get().initializeHistory()
+    get().syncStageAcrossScenes()
   },
   
   updateSceneName: (index, name) => {
@@ -1487,6 +1499,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   removeObjectFromAllScenes: (objectId) => {
+    if (!objectId) {
+      return
+    }
     set((state) => {
       const updatedScenes = state.scenes.map(scene => ({
         ...scene,

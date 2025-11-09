@@ -1,4 +1,4 @@
-'use client'
+  'use client'
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -13,13 +13,12 @@ import { Element, useEditorStore } from '@/hooks/useEditorStore'
 import { ActorsTab } from './ActorsTab'
 import { ObjectsTab } from './ObjectsTab'
 import { DeixaTab } from './DeixaTab'
-import { NotesTab } from './NotesTab'
 import { ToolsTab } from './ToolsTab'
 import { 
   Palette, Settings, Layers, Users, Box, Lock, Unlock, Theater, MessageSquare, MoreHorizontal,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Group, Ungroup,
-  GripVertical, ChevronRight, FileText
+  GripVertical, ChevronRight
 } from 'lucide-react'
 
 interface EditorSidebarProps {
@@ -329,32 +328,29 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   // Sidebar agora é overlay absoluto; não precisa mais de largura dinâmica do container
 
   return (
-    <div className="h-full flex border-l border-gray-200 bg-white shadow-sm min-w-[64px]">
+    <div className="h-full flex border-l border-gray-200 bg-white shadow-sm">
       <Tabs value={activeTab} className="flex w-full">
         {/* Coluna de ícones */}
-        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50">
-          <TabsTrigger value="properties" onClick={() => handleTabClick('properties')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50 rounded-none">
+          <TabsTrigger value="properties" onClick={() => handleTabClick('properties')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Settings className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="colors" onClick={() => handleTabClick('colors')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+          <TabsTrigger value="colors" onClick={() => handleTabClick('colors')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Palette className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="layers" onClick={() => handleTabClick('layers')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+          <TabsTrigger value="layers" onClick={() => handleTabClick('layers')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Layers className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="actors" onClick={() => handleTabClick('actors')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+          <TabsTrigger value="actors" onClick={() => handleTabClick('actors')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Users className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="objects" onClick={() => handleTabClick('objects')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+          <TabsTrigger value="objects" onClick={() => handleTabClick('objects')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Box className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="deixa" onClick={() => handleTabClick('deixa')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+          <TabsTrigger value="deixa" onClick={() => handleTabClick('deixa')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <MessageSquare className="h-4 w-4" />
           </TabsTrigger>
-          <TabsTrigger value="notes" onClick={() => handleTabClick('notes')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
-            <FileText className="h-4 w-4" />
-          </TabsTrigger>
-          <TabsTrigger value="tools" onClick={() => handleTabClick('tools')} className="flex items-center justify-center h-10 w-10 p-0 rounded-md hover:bg-gray-200 data-[state=active]:bg-gray-300">
+          <TabsTrigger value="tools" onClick={() => handleTabClick('tools')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <MoreHorizontal className="h-4 w-4" />
           </TabsTrigger>
         </TabsList>
@@ -822,7 +818,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                       return (
                         <div
                           key={group.id}
-                          className="flex items-center justify-between p-2 bg-gray-50 rounded border"
+                          className="flex items-center justify-between p-2 bg-red-50 rounded border"
                         >
                           <div className="flex items-center gap-2">
                             {isLocked ? (
@@ -991,10 +987,6 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
 
           <TabsContent value="deixa" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
             <DeixaTab />
-          </TabsContent>
-
-          <TabsContent value="notes" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
-            <NotesTab />
           </TabsContent>
 
           <TabsContent value="tools" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">

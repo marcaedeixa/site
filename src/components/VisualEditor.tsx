@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { EditorToolbar } from './editor/EditorToolbar'
 import { EditorTopToolbar } from './editor/EditorTopToolbar'
 import { EditorCanvas } from './editor/EditorCanvas'
@@ -165,161 +165,186 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     }
   }, [selectedElements, weldElements])
 
+  const getSelectedShapeElements = useCallback(() => {
+    return elements.filter(el => 
+      selectedElements.includes(el.id) &&
+      (el.type === 'rectangle' || el.type === 'circle' || el.type === 'path')
+    )
+  }, [elements, selectedElements])
+
+  const canRunBooleanOps = useMemo(() => {
+    return getSelectedShapeElements().length >= 2
+  }, [getSelectedShapeElements])
+
   // Boolean operations handlers
   const handleUnionElements = useCallback(async () => {
-    if (selectedElements.length >= 2) {
-      try {
-        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
-        const result = await uniteMultipleShapes(selectedElementsData)
-        
-        if (result.success && result.svgPath) {
-          // Remove selected elements
-          deleteElements(selectedElements)
-          
-          // Add the unified element
-          addElement({
-            type: 'path',
-            x: result.bounds?.x || 0,
-            y: result.bounds?.y || 0,
-            width: result.bounds?.width || 100,
-            height: result.bounds?.height || 100,
-            strokeColor: selectedElementsData[0].strokeColor,
-            fillColor: selectedElementsData[0].fillColor,
-            strokeWidth: selectedElementsData[0].strokeWidth,
-            opacity: selectedElementsData[0].opacity,
-            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
-            points: [{ x: 0, y: 0 }], // Will be replaced by path data
-            locked: false, // Ensure the new element is not locked
-            // Store path data in a custom property
-            pathData: result.svgPath,
-            pathBounds: result.bounds
-          } as any)
-        }
-      } catch (error) {
-        console.error('Erro na operação de união:', error)
-      }
+    const shapeElements = getSelectedShapeElements()
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+      return
     }
-  }, [selectedElements, elements, deleteElements, addElement])
+
+    try {
+      const result = await uniteMultipleShapes(shapeElements)
+      
+      if (result.success && result.svgPath) {
+        const referenceElement = shapeElements[0]
+        const idsToRemove = shapeElements.map(el => el.id)
+        deleteElements(idsToRemove)
+        
+        addElement({
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width || 100,
+          height: result.bounds?.height || 100,
+          strokeColor: referenceElement.strokeColor,
+          fillColor: referenceElement.fillColor,
+          strokeWidth: referenceElement.strokeWidth,
+          opacity: referenceElement.opacity,
+          zIndex: Math.max(...shapeElements.map(el => el.zIndex || 0)),
+          points: [{ x: 0, y: 0 }],
+          locked: false,
+          pathData: result.svgPath,
+          pathBounds: result.bounds
+        } as any)
+      }
+    } catch (error) {
+      console.error('Erro na operação de união:', error)
+    }
+  }, [getSelectedShapeElements, deleteElements, addElement])
 
   const handleSubtractElements = useCallback(async () => {
-    if (selectedElements.length >= 2) {
-      try {
-        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
-        const shape1 = convertElementToShape(selectedElementsData[0])
-        const shape2 = convertElementToShape(selectedElementsData[1])
-        
-        if (!shape1 || !shape2) {
-          console.error('Não foi possível converter elementos para shapes')
-          return
-        }
-        
-        const result = await performBooleanOperation(shape1, shape2, 'subtract')
-        
-        if (result.success && result.svgPath) {
-          deleteElements(selectedElements)
-          
-          addElement({
-            type: 'path',
-            x: result.bounds?.x || 0,
-            y: result.bounds?.y || 0,
-            width: result.bounds?.width || 100,
-            height: result.bounds?.height || 100,
-            strokeColor: selectedElementsData[0].strokeColor,
-            fillColor: selectedElementsData[0].fillColor,
-            strokeWidth: selectedElementsData[0].strokeWidth,
-            opacity: selectedElementsData[0].opacity,
-            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
-            points: [{ x: 0, y: 0 }],
-            locked: false, // Ensure the new element is not locked
-            pathData: result.svgPath,
-            pathBounds: result.bounds
-          } as any)
-        }
-      } catch (error) {
-        console.error('Erro na operação de subtração:', error)
-      }
+    const shapeElements = getSelectedShapeElements()
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+      return
     }
-  }, [selectedElements, elements, deleteElements, addElement])
+
+    try {
+      const [first, second] = shapeElements
+      const shape1 = convertElementToShape(first)
+      const shape2 = convertElementToShape(second)
+      
+      if (!shape1 || !shape2) {
+        console.error('Não foi possível converter elementos para shapes')
+        return
+      }
+      
+      const result = await performBooleanOperation(shape1, shape2, 'subtract')
+      
+      if (result.success && result.svgPath) {
+        deleteElements([first.id, second.id])
+        
+        addElement({
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width || 100,
+          height: result.bounds?.height || 100,
+          strokeColor: first.strokeColor,
+          fillColor: first.fillColor,
+          strokeWidth: first.strokeWidth,
+          opacity: first.opacity,
+          zIndex: Math.max(first.zIndex || 0, second.zIndex || 0),
+          points: [{ x: 0, y: 0 }],
+          locked: false,
+          pathData: result.svgPath,
+          pathBounds: result.bounds
+        } as any)
+      }
+    } catch (error) {
+      console.error('Erro na operação de subtração:', error)
+    }
+  }, [getSelectedShapeElements, deleteElements, addElement])
 
   const handleIntersectElements = useCallback(async () => {
-    if (selectedElements.length >= 2) {
-      try {
-        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
-        const shape1 = convertElementToShape(selectedElementsData[0])
-        const shape2 = convertElementToShape(selectedElementsData[1])
-        
-        if (!shape1 || !shape2) {
-          console.error('Não foi possível converter elementos para shapes')
-          return
-        }
-        
-        const result = await performBooleanOperation(shape1, shape2, 'intersect')
-        
-        if (result.success && result.svgPath) {
-          deleteElements(selectedElements)
-          
-          addElement({
-            type: 'path',
-            x: result.bounds?.x || 0,
-            y: result.bounds?.y || 0,
-            width: result.bounds?.width || 100,
-            height: result.bounds?.height || 100,
-            strokeColor: selectedElementsData[0].strokeColor,
-            fillColor: selectedElementsData[0].fillColor,
-            strokeWidth: selectedElementsData[0].strokeWidth,
-            opacity: selectedElementsData[0].opacity,
-            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
-            points: [{ x: 0, y: 0 }],
-            locked: false, // Ensure the new element is not locked
-            pathData: result.svgPath,
-            pathBounds: result.bounds
-          } as any)
-        }
-      } catch (error) {
-        console.error('Erro na operação de interseção:', error)
-      }
+    const shapeElements = getSelectedShapeElements()
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+      return
     }
-  }, [selectedElements, elements, deleteElements, addElement])
+
+    try {
+      const [first, second] = shapeElements
+      const shape1 = convertElementToShape(first)
+      const shape2 = convertElementToShape(second)
+      
+      if (!shape1 || !shape2) {
+        console.error('Não foi possível converter elementos para shapes')
+        return
+      }
+      
+      const result = await performBooleanOperation(shape1, shape2, 'intersect')
+      
+      if (result.success && result.svgPath) {
+        deleteElements([first.id, second.id])
+        
+        addElement({
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width || 100,
+          height: result.bounds?.height || 100,
+          strokeColor: first.strokeColor,
+          fillColor: first.fillColor,
+          strokeWidth: first.strokeWidth,
+          opacity: first.opacity,
+          zIndex: Math.max(first.zIndex || 0, second.zIndex || 0),
+          points: [{ x: 0, y: 0 }],
+          locked: false,
+          pathData: result.svgPath,
+          pathBounds: result.bounds
+        } as any)
+      }
+    } catch (error) {
+      console.error('Erro na operação de interseção:', error)
+    }
+  }, [getSelectedShapeElements, deleteElements, addElement])
 
   const handleExcludeElements = useCallback(async () => {
-    if (selectedElements.length >= 2) {
-      try {
-        const selectedElementsData = elements.filter(el => selectedElements.includes(el.id))
-        const shape1 = convertElementToShape(selectedElementsData[0])
-        const shape2 = convertElementToShape(selectedElementsData[1])
-        
-        if (!shape1 || !shape2) {
-          console.error('Não foi possível converter elementos para shapes')
-          return
-        }
-        
-        const result = await performBooleanOperation(shape1, shape2, 'exclude')
-        
-        if (result.success && result.svgPath) {
-          deleteElements(selectedElements)
-          
-          addElement({
-            type: 'path',
-            x: result.bounds?.x || 0,
-            y: result.bounds?.y || 0,
-            width: result.bounds?.width || 100,
-            height: result.bounds?.height || 100,
-            strokeColor: selectedElementsData[0].strokeColor,
-            fillColor: selectedElementsData[0].fillColor,
-            strokeWidth: selectedElementsData[0].strokeWidth,
-            opacity: selectedElementsData[0].opacity,
-            zIndex: Math.max(...selectedElementsData.map(el => el.zIndex || 0)),
-            points: [{ x: 0, y: 0 }],
-            locked: false, // Ensure the new element is not locked
-            pathData: result.svgPath,
-            pathBounds: result.bounds
-          } as any)
-        }
-      } catch (error) {
-        console.error('Erro na operação de exclusão:', error)
-      }
+    const shapeElements = getSelectedShapeElements()
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+      return
     }
-  }, [selectedElements, elements, deleteElements, addElement])
+
+    try {
+      const [first, second] = shapeElements
+      const shape1 = convertElementToShape(first)
+      const shape2 = convertElementToShape(second)
+      
+      if (!shape1 || !shape2) {
+        console.error('Não foi possível converter elementos para shapes')
+        return
+      }
+      
+      const result = await performBooleanOperation(shape1, shape2, 'exclude')
+      
+      if (result.success && result.svgPath) {
+        deleteElements([first.id, second.id])
+        
+        addElement({
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width || 100,
+          height: result.bounds?.height || 100,
+          strokeColor: first.strokeColor,
+          fillColor: first.fillColor,
+          strokeWidth: first.strokeWidth,
+          opacity: first.opacity,
+          zIndex: Math.max(first.zIndex || 0, second.zIndex || 0),
+          points: [{ x: 0, y: 0 }],
+          locked: false,
+          pathData: result.svgPath,
+          pathBounds: result.bounds
+        } as any)
+      }
+    } catch (error) {
+      console.error('Erro na operação de exclusão:', error)
+    }
+  }, [getSelectedShapeElements, deleteElements, addElement])
 
   // Helper function to check if user is typing
   const isTyping = useCallback(() => {
@@ -489,6 +514,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           onSubtractElements={handleSubtractElements}
           onIntersectElements={handleIntersectElements}
           onExcludeElements={handleExcludeElements}
+          booleanOpsEnabled={canRunBooleanOps}
         />
 
         {/* Canvas Container no centro */}

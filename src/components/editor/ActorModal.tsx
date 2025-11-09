@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Element } from '@/hooks/useEditorStore'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/hooks/useAuth.tsx'
+import { useAuth } from '@/hooks/useAuth'
 import { useParams } from 'next/navigation'
 
 interface ActorModalProps {
@@ -67,10 +67,11 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
       newErrors.actorName = 'Nome deve ter pelo menos 2 caracteres'
     }
 
-    if (!formData.actorInitials.trim()) {
+    const initials = formData.actorInitials.trim().toUpperCase()
+    if (!initials) {
       newErrors.actorInitials = 'Iniciais são obrigatórias'
-    } else if (formData.actorInitials.length > 3) {
-      newErrors.actorInitials = 'Máximo 3 caracteres'
+    } else if (!/^[A-Z0-9]{2,3}$/.test(initials)) {
+      newErrors.actorInitials = 'Use 2 ou 3 caracteres alfanuméricos'
     }
 
     setErrors(newErrors)
@@ -88,6 +89,29 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
 
     try {
       setSaving(true)
+      const normalizedInitials = formData.actorInitials.trim().toUpperCase()
+
+      const { data: existingActors, error: fetchError } = await supabase
+        .from('actors')
+        .select('id, appearance_config')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+
+      if (fetchError) {
+        console.error('Erro ao validar sigla única:', fetchError)
+        setErrors({ actorInitials: 'Não foi possível validar a sigla. Tente novamente.' })
+        return
+      }
+
+      const initialsAlreadyUsed = (existingActors || []).some(actor => {
+        const storedInitials = (actor.appearance_config as any)?.initials
+        return storedInitials?.toUpperCase() === normalizedInitials
+      })
+
+      if (initialsAlreadyUsed) {
+        setErrors({ actorInitials: 'Já existe um ator com essa sigla neste projeto' })
+        return
+      }
       
       // Primeiro salvar no banco de dados
       const actorDbData = {
@@ -99,7 +123,7 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         appearance_config: {
           shape: 'circle',
           size: 50,
-          initials: formData.actorInitials.trim()
+          initials: normalizedInitials
         },
         default_speech_bubble: {
           style: 'rounded',

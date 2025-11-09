@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/hooks/useAuth.tsx'
+import { useAuth } from '@/hooks/useAuth'
 import { 
   Trash2, 
   Shapes,
@@ -61,8 +61,6 @@ export function ObjectsTab() {
         .order('created_at', { ascending: false })
       
       if (error) throw error
-      removeObjectFromAllScenes(objectId)
-      
       setObjects(data || [])
     } catch (err) {
       console.error('Erro ao carregar objetos:', err)
@@ -105,6 +103,7 @@ export function ObjectsTab() {
       
       if (error) throw error
       
+      removeObjectFromAllScenes(objectId)
       await loadObjects()
     } catch (err) {
       console.error('Erro ao excluir objeto:', err)
@@ -131,10 +130,34 @@ export function ObjectsTab() {
     const width = 32
     const height = 32
     const color = object.color || '#3b82f6'
+    const fallbackInitials = object.name
+      .split(' ')
+      .filter(Boolean)
+      .map(word => word.charAt(0).toUpperCase())
+      .slice(0, 2)
+      .join('')
+    const initials = ((object.initials?.trim() || fallbackInitials || '?')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 2)) || '?'
     
     const viewBox = `0 0 ${width} ${height}`
     const centerX = width / 2
     const centerY = height / 2
+
+    const commonTextProps = (
+      <text
+        x={centerX}
+        y={centerY}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fontSize="10"
+        fontWeight="bold"
+        fill="#ffffff"
+      >
+        {initials}
+      </text>
+    )
 
     switch (shape) {
       case 'triangle':
@@ -146,6 +169,7 @@ export function ObjectsTab() {
               stroke="#ffffff"
               strokeWidth="1.5"
             />
+            {commonTextProps}
           </svg>
         )
       case 'square':
@@ -160,6 +184,7 @@ export function ObjectsTab() {
               stroke="#ffffff"
               strokeWidth="1.5"
             />
+            {commonTextProps}
           </svg>
         )
       case 'hexagon':
@@ -180,6 +205,7 @@ export function ObjectsTab() {
               stroke="#ffffff"
               strokeWidth="1.5"
             />
+            {commonTextProps}
           </svg>
         )
       case 'rectangle':
@@ -195,6 +221,7 @@ export function ObjectsTab() {
               stroke="#ffffff"
               strokeWidth="1.5"
             />
+            {commonTextProps}
           </svg>
         )
     }

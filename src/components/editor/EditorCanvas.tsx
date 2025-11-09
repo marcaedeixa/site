@@ -446,6 +446,16 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     return group ? group.elementIds : [elementId]
   }, [getGroupFunctions])
 
+  const isStageElement = useCallback((elementId: string): boolean => {
+    const store = useEditorStore.getState()
+    const element = store.elements.find(el => el.id === elementId)
+    if (element?.type === 'stage') {
+      return true
+    }
+    const group = store.getElementGroup(elementId)
+    return group?.name === 'Palco'
+  }, [])
+
   // Convert screen coordinates to canvas coordinates
   const screenToCanvas = useCallback((screenX: number, screenY: number): Point => {
     const canvas = canvasRef.current
@@ -937,10 +947,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       return !(x > maxX || x + width < minX || y > maxY || y + height < minY)
     })
     
+    const { isElementLocked } = useEditorStore.getState()
     return potentialElements
       .filter(element => isElementInSelection(element, start, end))
+      .filter(element => !(stageConfig?.locked && isStageElement(element.id) && isElementLocked(element.id)))
       .map(element => element.id)
-  }, [elements, isElementInSelection])
+  }, [elements, isElementInSelection, stageConfig, isStageElement])
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1025,6 +1037,17 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       
       // Then check for element selection
       if (clickedElement) {
+        const storeState = useEditorStore.getState()
+        const { isElementLocked } = storeState
+        if (stageConfig?.locked && isElementLocked(clickedElement.id) && isStageElement(clickedElement.id)) {
+          setTooltip({
+            x: e.clientX,
+            y: e.clientY,
+            text: 'Palco bloqueado - destrave para editar'
+          })
+          setTimeout(() => setTooltip(null), 2000)
+          return
+        }
         
         // Get all elements in the same group as the clicked element
         const groupElements = getGroupElements(clickedElement.id)
@@ -1045,7 +1068,6 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
         
         // Start dragging - use current selection or group elements, but filter out locked ones
-        const { isElementLocked } = useEditorStore.getState()
         const elementsToMove = selectedElements.some(id => groupElements.includes(id)) 
           ? selectedElements 
           : groupElements
@@ -2307,20 +2329,20 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             
             switch (previewMode) {
               case 'start':
-                displayText = element.text.length > maxChars 
-                  ? element.text.substring(0, maxChars - 3) + '...'
-                  : element.text
+                displayText = baseText.length > maxChars 
+                  ? baseText.substring(0, Math.max(0, maxChars - 3)) + '...'
+                  : baseText
                 break
               case 'end':
-                displayText = element.text.length > maxChars 
-                  ? '...' + element.text.substring(element.text.length - (maxChars - 3))
-                  : element.text
+                displayText = baseText.length > maxChars 
+                  ? '...' + baseText.substring(Math.max(0, baseText.length - (Math.max(0, maxChars - 3))))
+                  : baseText
                 break
               case 'start-end':
-                if (element.text.length > maxChars) {
+                if (baseText.length > maxChars) {
                   const halfChars = Math.floor((maxChars - 3) / 2)
-                  displayText = element.text.substring(0, halfChars) + '...' + 
-                               element.text.substring(element.text.length - halfChars)
+                  displayText = baseText.substring(0, Math.max(0, halfChars)) + '...' + 
+                               baseText.substring(baseText.length - Math.max(0, halfChars))
                 }
                 break
             }

@@ -45,6 +45,7 @@ interface EditorToolbarProps {
   onSubtractElements: () => void
   onIntersectElements: () => void
   onExcludeElements: () => void
+  booleanOpsEnabled?: boolean
 }
 
 const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string; shortcut?: string }[] = [
@@ -68,7 +69,8 @@ export function EditorToolbar({
   onUnionElements,
   onSubtractElements,
   onIntersectElements,
-  onExcludeElements
+  onExcludeElements,
+  booleanOpsEnabled = true
 }: EditorToolbarProps) {
   const handleToolSelect = (tool: Tool) => {
     const { setSelectedTool } = useEditorStore.getState()
@@ -209,12 +211,18 @@ export function EditorToolbar({
       {/* Boolean Operations */}
       {selectedElements.length >= 2 && (
         <div className="flex flex-col gap-1">
+          {booleanOpsEnabled ? null : (
+            <span className="text-[10px] text-gray-500 text-center px-1">
+              Selecione apenas formas geométricas para habilitar
+            </span>
+          )}
           <Button
             variant="ghost"
             size="sm"
             onClick={onUnionElements}
-            title="União - Combinar formas (Ctrl+Shift+U)"
+            title={booleanOpsEnabled ? 'União - Combinar formas (Ctrl+Shift+U)' : 'Selecione ao menos duas formas geométricas'}
             className="w-12 h-12 p-0 hover:bg-green-100"
+            disabled={!booleanOpsEnabled}
           >
             <Plus className="h-4 w-4" />
           </Button>
@@ -222,8 +230,9 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onSubtractElements}
-            title="Subtração - Remover forma superior (Ctrl+Shift+S)"
+            title={booleanOpsEnabled ? 'Subtração - Remover forma superior (Ctrl+Shift+S)' : 'Selecione ao menos duas formas geométricas'}
             className="w-12 h-12 p-0 hover:bg-red-100"
+            disabled={!booleanOpsEnabled}
           >
             <Scissors className="h-4 w-4" />
           </Button>
@@ -231,8 +240,9 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onIntersectElements}
-            title="Interseção - Manter apenas sobreposição (Ctrl+Shift+I)"
+            title={booleanOpsEnabled ? 'Interseção - Manter apenas sobreposição (Ctrl+Shift+I)' : 'Selecione ao menos duas formas geométricas'}
             className="w-12 h-12 p-0 hover:bg-blue-100"
+            disabled={!booleanOpsEnabled}
           >
             <Merge className="h-4 w-4" />
           </Button>
@@ -240,8 +250,9 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onExcludeElements}
-            title="Exclusão - Remover sobreposição (Ctrl+Shift+E)"
+            title={booleanOpsEnabled ? 'Exclusão - Remover sobreposição (Ctrl+Shift+E)' : 'Selecione ao menos duas formas geométricas'}
             className="w-12 h-12 p-0 hover:bg-yellow-100"
+            disabled={!booleanOpsEnabled}
           >
             <XCircle className="h-4 w-4" />
           </Button>
