@@ -6,6 +6,40 @@ import { ActorModal } from './ActorModal'
 import { FullscreenSlideshow } from './FullscreenSlideshow'
 
 import { createUnifiedStageSync, extractPathData } from '@/lib/svgUtils'
+import { TOUCH_DROP_EVENT, TouchDropDetail, TouchDropPayload } from '@/hooks/useTouchCanvasDrop'
+
+type ActorDropPayload = TouchDropPayload & {
+  type: 'actor'
+  actorId: string
+  actorName: string
+  actorInitials: string
+  actorColor: string
+  actorShape: string
+  actorSize?: number
+  actorNotes?: string
+  fillColor: string
+  strokeColor: string
+  bubbleStyle?: string
+  bubbleColor?: string
+  bubbleTextColor?: string
+}
+
+type ObjectDropPayload = TouchDropPayload & {
+  type: 'object'
+  objectId: string
+  objectName: string
+  objectInitials?: string
+  objectNotes?: string
+  objectShape: string
+  objectWidth?: number
+  objectHeight?: number
+  fillColor?: string
+  strokeColor: string
+  strokeDasharray?: string
+}
+
+const isActorPayload = (payload: TouchDropPayload): payload is ActorDropPayload => payload.type === 'actor'
+const isObjectPayload = (payload: TouchDropPayload): payload is ObjectDropPayload => payload.type === 'object'
 
 interface EditorCanvasProps {
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -3160,84 +3194,106 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     setIsDragOver(true)
   }, [])
 
+  const isPointOverCanvas = useCallback((clientX: number, clientY: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return false
+    return (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    )
+  }, [])
+
+  const handleDropPayload = useCallback((data: TouchDropPayload, clientX: number, clientY: number) => {
+    if (!data || !isPointOverCanvas(clientX, clientY)) return
+
+    const canvasPoint = screenToCanvas(clientX, clientY)
+
+    if (isActorPayload(data)) {
+      const size = data.actorSize || 60
+      const actorElement: Omit<Element, 'id'> = {
+        type: 'actor',
+        x: canvasPoint.x - size / 2,
+        y: canvasPoint.y - size / 2,
+        width: size,
+        height: size,
+        actorId: data.actorId,
+        actorName: data.actorName,
+        actorInitials: data.actorInitials,
+        actorColor: data.actorColor,
+        actorShape: data.actorShape,
+        actorNotes: data.actorNotes,
+        actorRole: '',
+        actorSpeech: '',
+        fillColor: data.fillColor,
+        strokeColor: data.strokeColor,
+        strokeWidth: 2,
+        opacity: 1,
+        bubbleStyle: data.bubbleStyle,
+        bubbleColor: data.bubbleColor,
+        bubbleTextColor: data.bubbleTextColor,
+        zIndex: elements.length
+      }
+
+      onAddElement(actorElement)
+      return
+    }
+
+    if (isObjectPayload(data)) {
+      const width = data.objectWidth || 60
+      const height = data.objectHeight || 60
+      const objectElement: Omit<Element, 'id'> = {
+        type: 'object',
+        x: canvasPoint.x - width / 2,
+        y: canvasPoint.y - height / 2,
+        width,
+        height,
+        objectId: data.objectId,
+        objectName: data.objectName,
+        objectInitials: data.objectInitials,
+        objectNotes: data.objectNotes,
+        objectShape: data.objectShape,
+        fillColor: data.fillColor ?? 'transparent',
+        strokeColor: data.strokeColor,
+        strokeWidth: 2,
+        strokeDasharray: data.strokeDasharray || '5,5',
+        opacity: 1,
+        zIndex: elements.length
+      }
+
+      onAddElement(objectElement)
+    }
+  }, [isPointOverCanvas, screenToCanvas, elements.length, onAddElement])
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setIsDragOver(false)
     
     try {
       const data = JSON.parse(e.dataTransfer.getData('application/json'))
-      
-      if (data.type === 'actor') {
-        const rect = canvasRef.current?.getBoundingClientRect()
-        if (!rect) return
-        
-        // Convert screen coordinates to canvas coordinates
-        const canvasPoint = screenToCanvas(e.clientX, e.clientY)
-        
-        // Create actor element
-        const actorElement: Omit<Element, 'id'> = {
-          type: 'actor',
-          x: canvasPoint.x - (data.actorSize || 60) / 2, // Center on drop point
-          y: canvasPoint.y - (data.actorSize || 60) / 2,
-          width: data.actorSize || 60,
-          height: data.actorSize || 60,
-          actorId: data.actorId,
-          actorName: data.actorName,
-          actorInitials: data.actorInitials,
-          actorColor: data.actorColor,
-          actorShape: data.actorShape,
-          actorNotes: data.actorNotes,
-          actorRole: '',
-          actorSpeech: '',
-          fillColor: data.fillColor,
-          strokeColor: data.strokeColor,
-          strokeWidth: 2,
-          opacity: 1,
-          bubbleStyle: data.bubbleStyle,
-          bubbleColor: data.bubbleColor,
-          bubbleTextColor: data.bubbleTextColor,
-          zIndex: elements.length
-        }
-        
-        onAddElement(actorElement)
-      } else if (data.type === 'object') {
-        const rect = canvasRef.current?.getBoundingClientRect()
-        if (!rect) return
-        
-        // Convert screen coordinates to canvas coordinates
-        const canvasPoint = screenToCanvas(e.clientX, e.clientY)
-        
-        // Create object element
-        const objectElement: Omit<Element, 'id'> = {
-          type: 'object',
-          x: canvasPoint.x - (data.objectWidth || 60) / 2, // Center on drop point
-          y: canvasPoint.y - (data.objectHeight || 60) / 2,
-          width: data.objectWidth || 60,
-          height: data.objectHeight || 60,
-          objectId: data.objectId,
-          objectName: data.objectName,
-          objectInitials: data.objectInitials,
-          objectNotes: data.objectNotes,
-          objectShape: data.objectShape,
-          fillColor: 'transparent',
-          strokeColor: data.objectColor,
-          strokeWidth: 2,
-          strokeDasharray: '5,5',
-          opacity: 1,
-          zIndex: elements.length
-        }
-        
-        onAddElement(objectElement)
-      }
+      handleDropPayload(data, e.clientX, e.clientY)
     } catch (error) {
       console.error('Error handling drop:', error)
     }
-  }, [screenToCanvas, elements.length, onAddElement])
+  }, [handleDropPayload])
+
+  useEffect(() => {
+    const handleTouchDrop = (event: Event) => {
+      const customEvent = event as CustomEvent<TouchDropDetail>
+      if (!customEvent.detail) return
+      handleDropPayload(customEvent.detail.payload, customEvent.detail.clientX, customEvent.detail.clientY)
+    }
+
+    window.addEventListener(TOUCH_DROP_EVENT, handleTouchDrop as EventListener)
+    return () => window.removeEventListener(TOUCH_DROP_EVENT, handleTouchDrop as EventListener)
+  }, [handleDropPayload])
 
   return (
     <>
       <canvas
         ref={canvasRef}
+        data-editor-canvas="true"
         className={`absolute inset-0 cursor-crosshair transition-all duration-200 ${
           isDragOver ? 'ring-2 ring-blue-400 ring-opacity-50 bg-blue-50 bg-opacity-10' : ''
         }`}

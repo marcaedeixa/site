@@ -490,7 +490,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="flex-1 min-h-0 flex flex-col bg-gray-50 overflow-hidden">
       {/* Barra de ferramentas horizontal no topo */}
       <EditorTopToolbar 
         onSave={autoSave}
@@ -502,7 +502,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       />
 
       {/* Layout principal com toolbar vertical, canvas e sidebar */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Toolbar à esquerda na vertical */}
         <EditorToolbar 
           selectedTool={selectedTool}
@@ -520,7 +520,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
         {/* Canvas Container no centro */}
         <div 
           ref={containerRef}
-          className="flex-1 relative bg-white overflow-hidden pb-[320px]"
+          className="flex-1 min-w-0 relative bg-white overflow-hidden"
         >
           <EditorCanvas
             ref={canvasRef}
@@ -545,13 +545,9 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
       {/* Painéis inferiores */}
       {!isFullscreenSlideshow && (
-        <div className="fixed inset-x-0 bottom-0 z-50 pointer-events-none">
-          <div className="pointer-events-auto">
-            <SceneNotesPanel />
-          </div>
-          <div className="pointer-events-auto">
-            <EditorBottomBar />
-          </div>
+        <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 px-2 sm:px-4 py-3 flex-shrink-0">
+          <SceneNotesPanel />
+          <EditorBottomBar />
         </div>
       )}
     </div>

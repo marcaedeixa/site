@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { Element, useEditorStore } from '@/hooks/useEditorStore'
+import { useTouchCanvasDrop } from '@/hooks/useTouchCanvasDrop'
 
 interface ObjectItem {
   id: string
@@ -44,6 +45,12 @@ export function ObjectsTab() {
   const [deletingObjectId, setDeletingObjectId] = useState<string | null>(null)
 
   const supabase = createClient()
+  const {
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    handleTouchCancel
+  } = useTouchCanvasDrop()
 
   // Carregar objetos do projeto
   const loadObjects = useCallback(async () => {
@@ -264,33 +271,39 @@ export function ObjectsTab() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 min-w-0">
-            {objects.map((object) => (
+            {objects.map((object) => {
+              const config = object.appearance_config || {}
+              const dragPayload = {
+                type: 'object',
+                objectId: object.id,
+                objectName: object.name,
+                objectInitials: object.initials || '',
+                objectShape: config.shape || 'rectangle',
+                objectWidth: config.width || 100,
+                objectHeight: config.height || 100,
+                objectColor: object.color || '#3b82f6',
+                strokeDasharray: config.strokeDasharray || '5,5',
+                fillColor: 'transparent',
+                strokeColor: object.color || '#3b82f6'
+              }
+
+              return (
               <Card 
                 key={object.id} 
                 className="hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing relative min-w-0 overflow-hidden"
                 draggable={true}
                 onDragStart={(e) => {
-                  const config = object.appearance_config || {}
-                  
-                  e.dataTransfer.setData('application/json', JSON.stringify({
-                    type: 'object',
-                    objectId: object.id,
-                    objectName: object.name,
-                    objectInitials: object.initials || '',
-                    objectShape: config.shape || 'rectangle',
-                    objectWidth: config.width || 100,
-                    objectHeight: config.height || 100,
-                    objectColor: object.color || '#3b82f6',
-                    strokeDasharray: config.strokeDasharray || '5,5',
-                    fillColor: 'transparent',
-                    strokeColor: object.color || '#3b82f6'
-                  }))
+                  e.dataTransfer.setData('application/json', JSON.stringify(dragPayload))
                   e.dataTransfer.effectAllowed = 'copy'
                 }}
                 onDragEnd={(e) => {
                   // Reset cursor
                   e.currentTarget.style.cursor = 'grab'
                 }}
+                onTouchStart={(e) => handleTouchStart(e, dragPayload)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchCancel}
               >
                 <CardContent className="p-2">
                   <div className="flex flex-col items-center text-center">
@@ -319,7 +332,7 @@ export function ObjectsTab() {
                   </Button>
                 </CardContent>
               </Card>
-            ))}
+            )})}
           </div>
         )}
       </div>

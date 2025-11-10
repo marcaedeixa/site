@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { Element, useEditorStore } from '@/hooks/useEditorStore'
+import { useTouchCanvasDrop } from '@/hooks/useTouchCanvasDrop'
 
 interface Actor {
   id: string
@@ -47,6 +48,12 @@ export function ActorsTab() {
   const [deletingActorId, setDeletingActorId] = useState<string | null>(null)
 
   const supabase = createClient()
+  const {
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
+    handleTouchCancel
+  } = useTouchCanvasDrop()
 
   // Carregar atores do projeto
   const loadActors = useCallback(async () => {
@@ -180,6 +187,21 @@ export function ActorsTab() {
                 .toUpperCase()
                 .replace(/[^A-Z0-9]/g, '')
                 .slice(0, 2) || '?'
+              const dragPayload = {
+                type: 'actor',
+                actorId: actor.id,
+                actorName: actor.name,
+                actorInitials,
+                actorColor: actor.color || '#3b82f6',
+                actorShape: actor.appearance_config?.shape || 'circle',
+                actorSize: actor.appearance_config?.size || 60,
+                actorNotes: actor.notes || '',
+                fillColor: actor.color || '#3b82f6',
+                strokeColor: '#ffffff',
+                bubbleStyle: actor.default_speech_bubble?.style || 'rounded',
+                bubbleColor: actor.default_speech_bubble?.color || '#ffffff',
+                bubbleTextColor: actor.default_speech_bubble?.textColor || '#000000'
+              }
 
               return (
                 <Card 
@@ -187,26 +209,16 @@ export function ActorsTab() {
                   className="hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing relative min-w-0 overflow-hidden"
                   draggable={true}
                   onDragStart={(e) => {
-                    e.dataTransfer.setData('application/json', JSON.stringify({
-                      type: 'actor',
-                      actorId: actor.id,
-                      actorName: actor.name,
-                      actorInitials: actorInitials,
-                      actorColor: actor.color || '#3b82f6',
-                      actorShape: actor.appearance_config?.shape || 'circle',
-                      actorSize: actor.appearance_config?.size || 60,
-                      actorNotes: actor.notes || '',
-                      fillColor: actor.color || '#3b82f6',
-                      strokeColor: '#ffffff',
-                      bubbleStyle: actor.default_speech_bubble?.style || 'rounded',
-                      bubbleColor: actor.default_speech_bubble?.color || '#ffffff',
-                      bubbleTextColor: actor.default_speech_bubble?.textColor || '#000000'
-                    }))
+                    e.dataTransfer.setData('application/json', JSON.stringify(dragPayload))
                     e.dataTransfer.effectAllowed = 'copy'
                   }}
                   onDragEnd={(e) => {
                     e.currentTarget.style.cursor = 'grab'
                   }}
+                  onTouchStart={(e) => handleTouchStart(e, dragPayload)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onTouchCancel={handleTouchCancel}
                 >
                   <CardContent className="p-2">
                     <div className="flex flex-col items-center text-center">
