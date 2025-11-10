@@ -454,10 +454,35 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return
     }
 
-    set((state) => ({
-      elements: state.elements.filter((el) => !allowedIds.includes(el.id)),
-      selectedElements: state.selectedElements.filter((id) => !allowedIds.includes(id)),
-    }))
+    set((state) => {
+      const updatedElements = state.elements.filter((el) => !allowedIds.includes(el.id))
+      const updatedSelected = state.selectedElements.filter((id) => !allowedIds.includes(id))
+
+      const currentStageGroup = state.groups.find(group => group.name === 'Palco')
+      let updatedGroups = state.groups
+
+      if (currentStageGroup) {
+        const remainingStageElements = currentStageGroup.elementIds.filter(stageId =>
+          updatedElements.some(el => el.id === stageId)
+        )
+
+        if (remainingStageElements.length === 0) {
+          updatedGroups = state.groups.filter(group => group.id !== currentStageGroup.id)
+        } else if (remainingStageElements.length !== currentStageGroup.elementIds.length) {
+          updatedGroups = state.groups.map(group =>
+            group.id === currentStageGroup.id
+              ? { ...group, elementIds: remainingStageElements }
+              : group
+          )
+        }
+      }
+
+      return {
+        elements: updatedElements,
+        selectedElements: updatedSelected,
+        groups: updatedGroups
+      }
+    })
     
     get().saveToHistory()
     get().updateCurrentScene()
@@ -1301,8 +1326,34 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return
     }
 
+    const removeStageFromScenes = (scenesList: Scene[]) =>
+      scenesList.map(scene => {
+        const stageGroupsInScene = scene.groups.filter(group => group.name === 'Palco')
+        if (stageGroupsInScene.length === 0) {
+          return scene
+        }
+
+        const stageIds = stageGroupsInScene.reduce<Set<string>>((acc, group) => {
+          group.elementIds.forEach(id => acc.add(id))
+          return acc
+        }, new Set<string>())
+
+        const filteredElements = scene.elements.filter(el => !stageIds.has(el.id))
+        const filteredGroups = scene.groups.filter(group => group.name !== 'Palco')
+
+        return {
+          ...scene,
+          elements: filteredElements,
+          groups: filteredGroups,
+          timestamp: new Date().toISOString()
+        }
+      })
+
     const stageGroup = groups.find(group => group.name === 'Palco')
     if (!stageGroup) {
+      set((state) => ({
+        scenes: removeStageFromScenes(state.scenes)
+      }))
       return
     }
 
@@ -1311,6 +1362,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       .filter((el): el is Element => Boolean(el))
 
     if (stageElements.length === 0) {
+      set((state) => ({
+        groups: state.groups.filter(group => group.id !== stageGroup.id),
+        scenes: removeStageFromScenes(state.scenes)
+      }))
       return
     }
 

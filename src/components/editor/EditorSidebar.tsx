@@ -35,6 +35,18 @@ const colorPresets = [
 export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSidebarProps) {
   const [activeTab, setActiveTab] = useState('properties')
   const [draggedElement, setDraggedElement] = useState<string | null>(null)
+
+  const sanitizeInitials = (value: string) =>
+    value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 2)
+
+  const deriveInitialsFromName = (name: string) =>
+    sanitizeInitials(
+      name
+        .split(' ')
+        .filter(Boolean)
+        .map(word => word.charAt(0))
+        .join('')
+    )
   const [dragOverElement, setDragOverElement] = useState<string | null>(null)
   const [dragPosition, setDragPosition] = useState<'above' | 'below' | null>(null)
   
@@ -179,17 +191,34 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
         const updates: Partial<Element> = { [property]: value }
 
         if (property === 'actorName') {
-          const initials = value
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase())
-            .slice(0, 2)
-            .join('')
-          updates.actorInitials = initials
+          updates.actorInitials = deriveInitialsFromName(value)
         }
 
         if (property === 'actorInitials') {
-          const formatted = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3)
-          updates.actorInitials = formatted
+          updates.actorInitials = sanitizeInitials(value)
+        }
+
+        onUpdateElement(id, updates)
+      }
+    })
+  }
+
+  const handleObjectPropertyChange = (property: string, value: string) => {
+    selectedElements.forEach(id => {
+      const element = elements.find(el => el.id === id)
+      if (element?.type === 'object') {
+        const updates: Partial<Element> = { [property]: value }
+
+        if (property === 'objectName') {
+          const previousAuto = deriveInitialsFromName(element.objectName || '')
+          const nextAuto = deriveInitialsFromName(value)
+          if (!element.objectInitials || element.objectInitials === previousAuto) {
+            updates.objectInitials = nextAuto
+          }
+        }
+
+        if (property === 'objectInitials') {
+          updates.objectInitials = sanitizeInitials(value)
         }
 
         onUpdateElement(id, updates)
@@ -470,8 +499,33 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             value={selectedElement.actorInitials || ''}
                             onChange={(e) => handleActorPropertyChange('actorInitials', e.target.value)}
                             className="h-8 uppercase"
-                            maxLength={3}
+                            maxLength={2}
                             placeholder="Ex: AB"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Object Properties */}
+                    {selectedElement?.type === 'object' && (
+                      <div className="space-y-3">
+                        <div>
+                          <Label className="text-xs">Nome do Objeto</Label>
+                          <Input
+                            value={selectedElement.objectName || ''}
+                            onChange={(e) => handleObjectPropertyChange('objectName', e.target.value)}
+                            className="h-8"
+                            placeholder="Nome do objeto..."
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Sigla</Label>
+                          <Input
+                            value={selectedElement.objectInitials || ''}
+                            onChange={(e) => handleObjectPropertyChange('objectInitials', e.target.value)}
+                            className="h-8 uppercase"
+                            maxLength={2}
+                            placeholder="Ex: OB"
                           />
                         </div>
                       </div>

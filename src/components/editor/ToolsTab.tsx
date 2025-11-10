@@ -52,12 +52,16 @@ export function ToolsTab() {
     const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
     const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
 
+    const lineHeight = textBoxConfig.fontSize * 1.2
+    const padding = 16 // 8px topo + 8px base
+    const defaultHeight = Math.max(textBoxConfig.fontSize * 1.5, lineHeight + padding)
+
     addElement({
       type: 'textbox',
       x: centerX - textBoxConfig.width / 2,
       y: centerY - 20,
       width: textBoxConfig.width,
-      height: textBoxConfig.fontSize * 1.5,
+      height: defaultHeight,
       text: textBoxConfig.text,
       fontSize: textBoxConfig.fontSize,
       strokeColor: '#000000',
