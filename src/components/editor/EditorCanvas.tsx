@@ -99,6 +99,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const textMeasureContextRef = useRef<CanvasRenderingContext2D | null>(null)
   const pendingTextElementRef = useRef(false)
   const previousElementsRef = useRef<Element[]>([])
+  const touchGestureRef = useRef<{
+    initialDistance: number
+    initialZoom: number
+    initialViewport: Viewport
+    initialMidpoint: { x: number; y: number }
+  } | null>(null)
   
   // Guide lines state
   const [guideLines, setGuideLines] = useState<{
@@ -501,6 +507,27 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     
     return { x, y }
   }, [viewport])
+
+  const getTouchPair = (touchList: TouchList): [Touch, Touch] | null => {
+    if (touchList.length < 2) return null
+    const first = touchList[0]
+    const second = touchList[1]
+    if (!first || !second) return null
+    return [first, second]
+  }
+
+  const getTouchDistance = (touch1: Touch, touch2: Touch) => {
+    return Math.hypot(touch1.clientX - touch2.clientX, touch1.clientY - touch2.clientY)
+  }
+
+  const getTouchMidpoint = (touch1: Touch, touch2: Touch) => {
+    return {
+      x: (touch1.clientX + touch2.clientX) / 2,
+      y: (touch1.clientY + touch2.clientY) / 2
+    }
+  }
+
+  const clampZoom = (value: number) => Math.max(0.1, Math.min(5, value))
 
   // Check if point is inside element
   const isPointInElement = useCallback((point: Point, element: Element): boolean => {
@@ -1773,7 +1800,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
   }, [isDrawing, currentElement, onAddElement, isSelecting, selectionStart, selectionEnd, getElementsInSelection, getGroupElements, selectedElements, onSelectElements, isResizing, resizePreview, elements, onUpdateElement, draggedElements, selectedTool])
 
-  // Handle wheel for zoom and horizontal scroll
+  // Handle wheel for zoom and trackpad scrolling
   const handleWheel = useCallback((event: WheelEvent) => {
     // Always block browser zoom/scroll when handling the gesture ourselves
     if (event.cancelable) {
@@ -1808,15 +1835,30 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         y: newY,
         zoom: newZoom
       })
-    } else if (event.shiftKey) {
-      // Horizontal scroll with Shift + scroll
-      const scrollSpeed = 50
-      const deltaX = event.deltaY > 0 ? -scrollSpeed : scrollSpeed
+    } else {
+      // Trackpad two-finger pan or regular scroll
+      const modeScale = event.deltaMode === WheelEvent.DOM_DELTA_PIXEL
+        ? 1
+        : event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : 100
       
-      onUpdateViewport({
-        ...viewport,
-        x: viewport.x + deltaX
-      })
+      let deltaX = event.deltaX * modeScale
+      let deltaY = event.deltaY * modeScale
+
+      // Holding shift should force horizontal scroll (common UX)
+      if (event.shiftKey && Math.abs(deltaY) > Math.abs(deltaX)) {
+        deltaX = deltaY
+        deltaY = 0
+      }
+
+      if (deltaX !== 0 || deltaY !== 0) {
+        onUpdateViewport({
+          ...viewport,
+          x: viewport.x + deltaX,
+          y: viewport.y + deltaY
+        })
+      }
     }
   }, [viewport, onUpdateViewport, stageConfig])
 
@@ -3312,6 +3354,38 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           }
         }}
         onTouchStart={(e) => {
+          const isPinchAttempt = e.touches.length >= 2
+          
+          if (isPinchAttempt) {
+            e.preventDefault()
+            const touchPair = getTouchPair(e.touches)
+            if (!touchPair) {
+              return
+            }
+
+            // Finaliza qualquer interação atual antes de iniciar a pinça
+            const syntheticMouseUp = new MouseEvent('mouseup', {
+              clientX: 0,
+              clientY: 0,
+              button: 0,
+              buttons: 0
+            })
+            handleMouseUp(syntheticMouseUp as any)
+
+            const [first, second] = touchPair
+            touchGestureRef.current = {
+              initialDistance: getTouchDistance(first, second),
+              initialZoom: viewport.zoom,
+              initialViewport: { ...viewport },
+              initialMidpoint: getTouchMidpoint(first, second)
+            }
+            return
+          }
+
+          if (touchGestureRef.current) {
+            return
+          }
+
           e.preventDefault()
           const touch = e.touches[0]
           if (touch) {
@@ -3325,6 +3399,47 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           }
         }}
         onTouchMove={(e) => {
+          if (touchGestureRef.current && e.touches.length >= 2) {
+            e.preventDefault()
+            const touchPair = getTouchPair(e.touches)
+            const canvas = canvasRef.current
+            if (!touchPair || !canvas) {
+              return
+            }
+
+            const gestureState = touchGestureRef.current
+            const { initialDistance, initialZoom, initialViewport, initialMidpoint } = gestureState
+            if (initialDistance === 0) {
+              return
+            }
+
+            const [first, second] = touchPair
+            const distance = getTouchDistance(first, second)
+            const midpoint = getTouchMidpoint(first, second)
+            const rect = canvas.getBoundingClientRect()
+            const pointerX = midpoint.x - rect.left
+            const pointerY = midpoint.y - rect.top
+
+            const distanceRatio = distance / initialDistance
+            const targetZoom = clampZoom(initialZoom * distanceRatio)
+            const zoomRatio = targetZoom / initialZoom
+
+            const deltaX = midpoint.x - initialMidpoint.x
+            const deltaY = midpoint.y - initialMidpoint.y
+            let nextX = initialViewport.x + deltaX
+            let nextY = initialViewport.y + deltaY
+
+            nextX = pointerX - (pointerX - nextX) * zoomRatio
+            nextY = pointerY - (pointerY - nextY) * zoomRatio
+
+            onUpdateViewport({ x: nextX, y: nextY, zoom: targetZoom })
+            return
+          }
+
+          if (touchGestureRef.current) {
+            return
+          }
+
           e.preventDefault()
           const touch = e.touches[0]
           if (touch) {
@@ -3338,7 +3453,29 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           }
         }}
         onTouchEnd={(e) => {
+          const wasPinching = Boolean(touchGestureRef.current)
+          if (touchGestureRef.current && e.touches.length < 2) {
+            touchGestureRef.current = null
+          }
+
+          if (wasPinching) {
+            return
+          }
+
           e.preventDefault()
+          const mouseEvent = new MouseEvent('mouseup', {
+            clientX: 0,
+            clientY: 0,
+            button: 0,
+            buttons: 0
+          })
+          handleMouseUp(mouseEvent as any)
+        }}
+        onTouchCancel={() => {
+          if (touchGestureRef.current) {
+            touchGestureRef.current = null
+            return
+          }
           const mouseEvent = new MouseEvent('mouseup', {
             clientX: 0,
             clientY: 0,
