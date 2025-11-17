@@ -475,6 +475,16 @@ function generateSVG(elements: Element[], stageConfig: StageConfig | null): stri
       case 'object': {
         const radius = (element as any).borderRadius ?? 0
         svg += `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" rx="${radius}" ry="${radius}" />`
+        
+        // Render object initials at the top-left to mirror canvas cards
+        if (type === 'object') {
+          const initials = (element as any).objectInitials || (element as any).objectName || ''
+          if (initials) {
+            const safeInitials = sanitizeAttrValue(String(initials))
+            const objectTextColor = sanitizeAttrValue(normalizeStrokeColor(strokeColor) || '#000000')
+            svg += `<text x="${x + 8}" y="${y + Math.max(12, (fontSize ?? 16))}" font-size="${Math.max(12, fontSize ?? 16)}" fill="${objectTextColor}" opacity="${opacity}" dominant-baseline="ideographic">${safeInitials}</text>`
+          }
+        }
         if (type === 'textbox' && element.textBoxConfig?.fullText) {
           const escapedText = sanitizeAttrValue(element.textBoxConfig.fullText)
           const textColor = sanitizeAttrValue(normalizeStrokeColor(strokeColor) || '#000000')
@@ -639,17 +649,30 @@ function generatePNG(elements: Element[], stageConfig: StageConfig | null): Prom
       ctx.lineWidth = strokeWidth
       
       switch (type) {
-        case 'rectangle':
-        case 'textbox':
-        case 'object': {
-          if (normalizedFill !== 'none') {
-            ctx.fillRect(x, y, width, height)
-          }
-          if (strokeWidth > 0 && normalizedStroke !== 'none') {
-            ctx.strokeRect(x, y, width, height)
-          }
-          if (type === 'textbox' && element.textBoxConfig?.fullText) {
-            ctx.fillStyle = normalizedStroke === 'none' ? '#000000' : normalizedStroke
+      case 'rectangle':
+      case 'textbox':
+      case 'object': {
+      if (normalizedFill !== 'none') {
+        ctx.fillRect(x, y, width, height)
+      }
+      if (strokeWidth > 0 && normalizedStroke !== 'none') {
+        ctx.strokeRect(x, y, width, height)
+      }
+      if (type === 'object') {
+        const initials = (element as any).objectInitials || (element as any).objectName || ''
+        if (initials) {
+          ctx.save()
+          ctx.globalAlpha = 1
+          ctx.fillStyle = normalizedStroke === 'none' ? '#000000' : normalizedStroke
+          ctx.font = `${Math.max(12, fontSize ?? 16)}px Arial`
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'top'
+          ctx.fillText(String(initials), x + 8, y + 6)
+          ctx.restore()
+        }
+      }
+      if (type === 'textbox' && element.textBoxConfig?.fullText) {
+        ctx.fillStyle = normalizedStroke === 'none' ? '#000000' : normalizedStroke
             ctx.globalAlpha = 1
             ctx.font = `${fontSize ?? 16}px Arial`
             ctx.textAlign = 'left'
