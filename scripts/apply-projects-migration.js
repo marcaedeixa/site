@@ -19,7 +19,7 @@ async function applyProjectsMigration() {
   
   try {
     // Ler o arquivo de migração
-    const migrationPath = path.join(__dirname, 'supabase', 'migrations', '004_create_projects_table.sql')
+    const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '004_create_projects_table.sql')
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8')
     
     console.log('📄 Lendo arquivo de migração...')

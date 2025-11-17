@@ -21,14 +21,6 @@ Invoke-WebRequest -Uri "http://localhost:3001/api/admin/login" -Method POST \
 # Resultado: Status 200 - Login bem-sucedido
 ```
 
-### 3. Teste via Script Node.js
-```bash
-node scripts/test-admin-login-fixed.js
-# ✅ Login bem-sucedido!
-# 👤 Usuário: admin@marcaedeixa.com
-# 🔑 Role: super_admin
-```
-
 ## Correções Implementadas
 
 ### 1. Senha Correta na Interface
@@ -64,7 +56,6 @@ node scripts/test-admin-login-fixed.js
 - `src/hooks/useAdminAuth.tsx` - Hook de autenticação
 - `src/app/admin/login/page.tsx` - Página de login
 - `src/app/admin/layout.tsx` - Layout com provider
-- `scripts/test-admin-login-fixed.js` - Script de teste
 
 ## Conclusão
 O sistema de login administrativo está funcionando corretamente. O erro inicial pode ter sido causado por:

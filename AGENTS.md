@@ -9,7 +9,7 @@
 - `npm run lint` — run the shared ESLint + TypeScript config.
 - `npm run stripe:webhook[:setup|:list]` — call `src/scripts/setup-stripe-webhooks.ts` to sync endpoints.
 - `npm run stripe:products` — seed Stripe catalog data from `src/lib/stripe-config`.
-- `node apply-projects-migration.js` — apply Supabase migrations stored in `supabase/`.
+- `node scripts/apply-projects-migration.js` — apply Supabase migrations stored in `supabase/`.
 Use `npx playwright test` for automated UI checks before shipping.
 
 ## Coding Style & Naming Conventions
@@ -22,4 +22,4 @@ Playwright drives regression tests (`npx playwright test`), while Supabase/Strip
 History favors short, present-tense messages (e.g., `sidebar direita`, `last fixes`); keep that tone, optionally prefixing a scope (`billing: guard usage quota`) and tagging the ticket in brackets. Pull requests should summarize the change, list manual test steps, link the issue, and attach screenshots or Looms for any UI delta. Highlight new env vars, migrations, or background jobs so deployers know what to run.
 
 ## Security & Configuration Tips
-Store secrets in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, reCAPTCHA keys) and extend `.env.example` when adding variables. Run Stripe/Supabase scripts with least-privilege credentials, re-check policies via `check-rls-policies.js` after schema changes, and scrub user data before sharing logs or screenshots.
+Store secrets in `.env.local` (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, reCAPTCHA keys) and extend `.env.example` when adding variables. Run Stripe/Supabase scripts with least-privilege credentials, re-check policies via `scripts/check-rls-policies.js` after schema changes, and scrub user data before sharing logs or screenshots.

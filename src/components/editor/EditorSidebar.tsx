@@ -357,10 +357,10 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   // Sidebar agora é overlay absoluto; não precisa mais de largura dinâmica do container
 
   return (
-    <div className="h-full flex border-l border-gray-200 bg-white shadow-sm">
-      <Tabs value={activeTab} className="flex w-full">
+    <div className="h-full min-h-0 flex border-l border-gray-200 bg-white shadow-sm overflow-hidden">
+      <Tabs value={activeTab} className="flex w-full h-full min-h-0">
         {/* Coluna de ícones */}
-        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50 rounded-none">
+        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50 rounded-none overflow-y-auto">
           <TabsTrigger value="properties" onClick={() => handleTabClick('properties')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Settings className="h-4 w-4" />
           </TabsTrigger>
@@ -385,7 +385,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
         </TabsList>
 
         {/* Área de conteúdo das abas (retrátil) */}
-        <div className={`${isCollapsed ? 'hidden' : 'flex-1'} h-full bg-white p-3 overflow-y-hidden relative min-w-[260px] max-w-[360px]`}>
+        <div className={`${isCollapsed ? 'hidden' : 'flex-1 flex flex-col min-h-0'} h-full bg-white p-3 overflow-hidden relative min-w-[260px] max-w-[360px]`}>
           {/* Botão para recolher o painel */}
           <Button 
             variant="ghost" 
@@ -396,7 +396,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <TabsContent value="properties" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <TabsContent value="properties" className="space-y-4 mt-0 overflow-y-auto flex-1 pr-1">
             {selectedElements.length === 0 ? (
               <div className="text-center py-8">
                 <Settings className="h-12 w-12 mx-auto mb-4 text-gray-400" />
@@ -750,7 +750,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
             )}
           </TabsContent>
 
-          <TabsContent value="colors" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <TabsContent value="colors" className="space-y-4 mt-0 overflow-y-auto flex-1 pr-1">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Cores</CardTitle>
@@ -784,7 +784,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
             </Card>
           </TabsContent>
 
-          <TabsContent value="layers" className="space-y-4 mt-0 overflow-y-auto max-h-[calc(100vh-200px)]">
+          <TabsContent value="layers" className="space-y-4 mt-0 overflow-y-auto flex-1 pr-1">
             {/* Stage Controls */}
             <Card>
               <CardHeader className="pb-2">
@@ -1031,19 +1031,19 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
             </Card>
           </TabsContent>
 
-          <TabsContent value="actors" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+          <TabsContent value="actors" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden flex-1 min-w-0 pr-1">
             <ActorsTab />
           </TabsContent>
 
-          <TabsContent value="objects" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+          <TabsContent value="objects" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden flex-1 min-w-0 pr-1">
             <ObjectsTab />
           </TabsContent>
 
-          <TabsContent value="deixa" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+          <TabsContent value="deixa" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden flex-1 min-w-0 pr-1">
             <DeixaTab />
           </TabsContent>
 
-          <TabsContent value="tools" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-200px)] min-w-0">
+          <TabsContent value="tools" className="space-y-4 mt-0 overflow-y-auto overflow-x-hidden flex-1 min-w-0 pr-1">
             <ToolsTab />
           </TabsContent>
         </div>
