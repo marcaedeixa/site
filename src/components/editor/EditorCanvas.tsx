@@ -543,6 +543,26 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   const clampZoom = (value: number) => Math.max(0.1, Math.min(5, value))
 
+  // Normalize element bounds, handling negative widths/heights (e.g. lines drawn right-to-left)
+  const getElementBounds = useCallback((element: Element) => {
+    const width = element.width ?? 0
+    const height = element.height ?? 0
+
+    const minX = Math.min(element.x, element.x + width)
+    const maxX = Math.max(element.x + width, element.x)
+    const minY = Math.min(element.y, element.y + height)
+    const maxY = Math.max(element.y + height, element.y)
+
+    return {
+      minX,
+      maxX,
+      minY,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY
+    }
+  }, [])
+
   // Check if point is inside element
   const isPointInElement = useCallback((point: Point, element: Element): boolean => {
     const { x, y, width = 0, height = 0, type } = element
@@ -699,16 +719,19 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const getElementAtPoint = useCallback((point: Point): Element | null => {
     // Quick bounds check first, then detailed hit detection
     const candidateElements = elements.filter(element => {
-      const { x, y, width = 0, height = 0, type } = element
-      
+      const { type } = element
+
       // For 'path' elements with SVG pathData, skip quick bbox filter to avoid false negatives
       if (type === 'path' && (element as any).pathData) {
         return true
       }
+
+      const bounds = getElementBounds(element)
+      const padding = (type === 'line' || type === 'arrow') ? 12 : 5
       
-      // Otherwise, use bounding box quick filter
-      return point.x >= x - 5 && point.x <= x + width + 5 && 
-             point.y >= y - 5 && point.y <= y + height + 5
+      // Otherwise, use bounding box quick filter with padding
+      return point.x >= bounds.minX - padding && point.x <= bounds.maxX + padding && 
+             point.y >= bounds.minY - padding && point.y <= bounds.maxY + padding
     })
     
     // Sort candidates by zIndex (highest first) for proper hit detection
@@ -721,7 +744,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       }
     }
     return null
-  }, [elements, isPointInElement])
+  }, [elements, getElementBounds, isPointInElement])
 
   // Get resize handles for an element
   const getResizeHandles = useCallback((element: Element) => {
@@ -900,40 +923,47 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const minY = Math.min(start.y, end.y)
     const maxY = Math.max(start.y, end.y)
     
-    const { x, y, width = 0, height = 0, type } = element
+    const { type } = element
     
     switch (type) {
       case 'rectangle':
-      case 'text':
       case 'textbox':
+      case 'stage':
+      case 'object': {
+        const bounds = getElementBounds(element)
+        return bounds.minX >= minX && bounds.maxX <= maxX && bounds.minY >= minY && bounds.maxY <= maxY
+      }
+      
+      case 'text': {
         const fontSize = element.fontSize ?? 16
-        const metrics = type === 'text'
-          ? computeTextMetrics(element.text || '', fontSize)
-          : { width: width, height: height }
-        const effectiveWidth = type === 'text' ? (element.width ?? metrics.width) : width
-        const effectiveHeight = type === 'text' ? (element.height ?? metrics.height) : height
-        return x >= minX && y >= minY && x + effectiveWidth <= maxX && y + effectiveHeight <= maxY
+        const metrics = computeTextMetrics(element.text || '', fontSize)
+        const textWidth = element.width ?? metrics.width
+        const textHeight = element.height ?? metrics.height
+        const bounds = getElementBounds({
+          ...element,
+          width: textWidth,
+          height: textHeight
+        } as Element)
+        return bounds.minX >= minX && bounds.maxX <= maxX && bounds.minY >= minY && bounds.maxY <= maxY
+      }
       
       case 'circle':
-      case 'actor':
-        const radius = Math.min(width, height) / 2
-        const centerX = x + radius
-        const centerY = y + radius
-        return centerX - radius >= minX && centerY - radius >= minY && 
-               centerX + radius <= maxX && centerY + radius <= maxY
-      
-      case 'object':
-        // Objects can have different shapes, but for selection we use their bounding box
-        return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
+      case 'actor': {
+        const bounds = getElementBounds(element)
+        return bounds.minX >= minX && bounds.maxX <= maxX && bounds.minY >= minY && bounds.maxY <= maxY
+      }
       
       case 'line':
-      case 'arrow':
-        return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
+      case 'arrow': {
+        const bounds = getElementBounds(element)
+        return bounds.minX >= minX && bounds.maxX <= maxX && bounds.minY >= minY && bounds.maxY <= maxY
+      }
       
       case 'path':
         if (element.pathData) {
           // For SVG path data from boolean operations, use bounding box
-          return x >= minX && y >= minY && x + width <= maxX && y + height <= maxY
+          const bounds = getElementBounds(element)
+          return bounds.minX >= minX && bounds.maxX <= maxX && bounds.minY >= minY && bounds.maxY <= maxY
         } else if (element.points && element.points.length > 0) {
           // For freehand paths with points
           return element.points.every(point => 
@@ -945,7 +975,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       default:
         return false
     }
-  }, [computeTextMetrics])
+  }, [computeTextMetrics, getElementBounds])
 
   // Detect alignment guides between elements
   const detectAlignmentGuides = useCallback((draggedElementIds: string[], currentPositions: { [id: string]: { x: number, y: number } }) => {
@@ -1018,8 +1048,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     
     // Quick bounds check before detailed intersection
     const potentialElements = elements.filter(element => {
-      const { x, y, width = 0, height = 0 } = element
-      return !(x > maxX || x + width < minX || y > maxY || y + height < minY)
+      const bounds = getElementBounds(element)
+      return !(bounds.minX > maxX || bounds.maxX < minX || bounds.minY > maxY || bounds.maxY < minY)
     })
     
     const { isElementLocked } = useEditorStore.getState()
@@ -1027,7 +1057,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       .filter(element => isElementInSelection(element, start, end))
       .filter(element => !(stageConfig?.locked && isStageElement(element.id) && isElementLocked(element.id)))
       .map(element => element.id)
-  }, [elements, isElementInSelection, stageConfig, isStageElement])
+  }, [elements, getElementBounds, isElementInSelection, stageConfig, isStageElement])
 
   // Handle mouse down
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -1185,12 +1215,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         if (element.locked) return false
         
         // Check if point is inside element bounds
-        const elementBounds = {
-          x: element.x,
-          y: element.y,
-          width: element.width || 0,
-          height: element.height || 0
-        }
+        const elementBounds = getElementBounds(element)
         
         // For path elements (pen tool), check if point is near the path
         if (element.type === 'path' && element.points) {
@@ -1205,10 +1230,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
         
         // For other elements, check if point is inside bounds
-        return canvasPoint.x >= elementBounds.x &&
-               canvasPoint.x <= elementBounds.x + elementBounds.width &&
-               canvasPoint.y >= elementBounds.y &&
-               canvasPoint.y <= elementBounds.y + elementBounds.height
+        return canvasPoint.x >= elementBounds.minX &&
+               canvasPoint.x <= elementBounds.maxX &&
+               canvasPoint.y >= elementBounds.minY &&
+               canvasPoint.y <= elementBounds.maxY
       })
       
       // Delete elements under cursor
@@ -1267,7 +1292,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     setCurrentElement(newElement)
-  }, [selectedTool, selectedElements, screenToCanvas, getElementAtPoint, onSelectElements, onClearSelection, getCurrentProperties, getGroupElements, isSpacePressed])
+  }, [selectedTool, selectedElements, screenToCanvas, getElementAtPoint, onSelectElements, onClearSelection, getCurrentProperties, getGroupElements, getElementBounds, isSpacePressed])
 
   // Handle mouse move with debounced cursor update
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -1652,12 +1677,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         if (element.locked) return false
         
         // Check if point is inside element bounds
-        const elementBounds = {
-          x: element.x,
-          y: element.y,
-          width: element.width || 0,
-          height: element.height || 0
-        }
+        const elementBounds = getElementBounds(element)
         
         // For path elements (pen tool), check if point is near the path
         if (element.type === 'path' && element.points) {
@@ -1672,10 +1692,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
         
         // For other elements, check if point is inside bounds
-        return canvasPoint.x >= elementBounds.x &&
-               canvasPoint.x <= elementBounds.x + elementBounds.width &&
-               canvasPoint.y >= elementBounds.y &&
-               canvasPoint.y <= elementBounds.y + elementBounds.height
+        return canvasPoint.x >= elementBounds.minX &&
+               canvasPoint.x <= elementBounds.maxX &&
+               canvasPoint.y >= elementBounds.minY &&
+               canvasPoint.y <= elementBounds.maxY
       })
       
       // Delete elements under cursor
@@ -1715,7 +1735,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
       setCurrentElement(updatedElement)
     }
-  }, [isPanning, lastPanPoint, draggedElements, selectedTool, isDrawing, currentElement, startPoint, viewport, onUpdateViewport, dragOffset, elements, onUpdateElement, screenToCanvas, isSelecting, selectionStart, isResizing, resizeHandle, resizeStartPoint, resizeStartBounds, isShiftPressed, snapEnabled, snapToGrid, snapToSize])
+  }, [isPanning, lastPanPoint, draggedElements, selectedTool, isDrawing, currentElement, startPoint, viewport, onUpdateViewport, dragOffset, elements, onUpdateElement, screenToCanvas, isSelecting, selectionStart, isResizing, resizeHandle, resizeStartPoint, resizeStartBounds, isShiftPressed, snapEnabled, snapToGrid, snapToSize, getElementBounds])
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
