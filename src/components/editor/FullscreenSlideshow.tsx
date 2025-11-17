@@ -5,6 +5,20 @@ import { useEditorStore } from '@/hooks/useEditorStore'
 import { X, ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react'
 import { createUnifiedStageSync } from '@/lib/svgUtils'
 
+// Normalize object shape to handle Portuguese variations and case
+function normalizeObjectShape(shape?: string | null): 'triangle' | 'square' | 'hexagon' {
+  if (!shape) return 'square'
+  const cleaned = shape
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+
+  if (cleaned === 'triangle' || cleaned === 'triangulo') return 'triangle'
+  if (cleaned === 'hexagon' || cleaned === 'hexagono') return 'hexagon'
+  return 'square'
+}
+
 export const FullscreenSlideshow = () => {
   const {
     scenes,
@@ -417,8 +431,9 @@ export const FullscreenSlideshow = () => {
           const fill = el.fillColor && el.fillColor !== 'transparent' ? el.fillColor : 'none'
           const stroke = el.strokeColor || '#000'
           const strokeDasharray = el.strokeDasharray
+          const shape = normalizeObjectShape(el.objectShape)
 
-          if (el.objectShape === 'triangle') {
+          if (shape === 'triangle') {
             const points = [
               `${x + width / 2} ${y}`,
               `${x} ${y + height}`,
@@ -437,7 +452,7 @@ export const FullscreenSlideshow = () => {
             )
           }
 
-          if (el.objectShape === 'hexagon') {
+          if (shape === 'hexagon') {
             const cx = x + width / 2
             const cy = y + height / 2
             const radius = Math.min(width, height) / 2

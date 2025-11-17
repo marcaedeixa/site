@@ -41,6 +41,20 @@ type ObjectDropPayload = TouchDropPayload & {
 const isActorPayload = (payload: TouchDropPayload): payload is ActorDropPayload => payload.type === 'actor'
 const isObjectPayload = (payload: TouchDropPayload): payload is ObjectDropPayload => payload.type === 'object'
 
+// Normalize object shape to handle Portuguese variations and case
+function normalizeObjectShape(shape?: string | null): 'triangle' | 'square' | 'hexagon' {
+  if (!shape) return 'square'
+  const cleaned = shape
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+
+  if (cleaned === 'triangle' || cleaned === 'triangulo') return 'triangle'
+  if (cleaned === 'hexagon' || cleaned === 'hexagono') return 'hexagon'
+  return 'square'
+}
+
 interface EditorCanvasProps {
   containerRef: React.RefObject<HTMLDivElement | null>
   elements: Element[]
@@ -2657,8 +2671,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
       case 'object':
         // Draw object based on its shape
-        const objectShape = element.objectShape || 'square'
-        
+        const objectShape = normalizeObjectShape(element.objectShape)
+
         switch (objectShape) {
           case 'triangle':
             ctx.beginPath()
@@ -3032,9 +3046,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           break
         case 'object':
           // Draw object selection outline based on its shape
-          const objectShape = element.objectShape || 'square'
-          
-          switch (objectShape) {
+          const objectSelectionShape = normalizeObjectShape(element.objectShape)
+
+          switch (objectSelectionShape) {
             case 'triangle':
               ctx.beginPath()
               ctx.moveTo(x + width / 2, y - 2) // Top point

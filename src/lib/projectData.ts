@@ -177,6 +177,20 @@ function sanitizeFileName(name: string): string {
   return normalized || 'cena'
 }
 
+function normalizeObjectShape(shape?: string | null): 'triangle' | 'square' | 'hexagon' {
+  if (!shape) return 'square'
+  const cleaned = shape
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+
+  if (cleaned === 'triangle' || cleaned === 'triangulo') return 'triangle'
+  if (cleaned === 'hexagon' || cleaned === 'hexagono' || cleaned === 'hexagono') return 'hexagon'
+  // 'square', 'rectangle', 'quadrado', 'retangulo' all map to square
+  return 'square'
+}
+
 function getElementBounds(element: Element): Bounds | null {
   const strokeOffset = (element.strokeWidth ?? 0) / 2
   const x = element.x ?? 0
@@ -471,20 +485,11 @@ function generateSVG(elements: Element[], stageConfig: StageConfig | null): stri
     
     switch (type) {
       case 'rectangle':
-      case 'textbox':
-      case 'object': {
+      case 'textbox': {
         const radius = (element as any).borderRadius ?? 0
-        svg += `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" rx="${radius}" ry="${radius}" />`
-        
-        // Render object initials at the top-left to mirror canvas cards
-        if (type === 'object') {
-          const initials = (element as any).objectInitials || (element as any).objectName || ''
-          if (initials) {
-            const safeInitials = sanitizeAttrValue(String(initials))
-            const objectTextColor = sanitizeAttrValue(normalizeStrokeColor(strokeColor) || '#000000')
-            svg += `<text x="${x + 8}" y="${y + Math.max(12, (fontSize ?? 16))}" font-size="${Math.max(12, fontSize ?? 16)}" fill="${objectTextColor}" opacity="${opacity}" dominant-baseline="ideographic">${safeInitials}</text>`
-          }
-        }
+        const dashArray = getStrokeDashArray(element.strokeDasharray)
+        const dashAttr = dashArray ? ` stroke-dasharray="${sanitizeAttrValue(dashArray.join(' '))}"` : ''
+        svg += `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" rx="${radius}" ry="${radius}"${dashAttr} />`
         if (type === 'textbox' && element.textBoxConfig?.fullText) {
           const escapedText = sanitizeAttrValue(element.textBoxConfig.fullText)
           const textColor = sanitizeAttrValue(normalizeStrokeColor(strokeColor) || '#000000')
@@ -493,6 +498,46 @@ function generateSVG(elements: Element[], stageConfig: StageConfig | null): stri
         break
       }
       
+      case 'object': {
+        const dashArray = getStrokeDashArray(element.strokeDasharray)
+        const dashAttr = dashArray ? ` stroke-dasharray="${sanitizeAttrValue(dashArray.join(' '))}"` : ''
+        const shape = normalizeObjectShape(element.objectShape)
+        const label = sanitizeAttrValue(
+          element.objectInitials || element.objectName || ''
+        )
+        const fontSizeValue = Math.max(12, Math.min(width, height) * 0.3)
+
+        if (shape === 'triangle') {
+          const p1 = `${x + width / 2} ${y}`
+          const p2 = `${x} ${y + height}`
+          const p3 = `${x + width} ${y + height}`
+          svg += `<polygon points="${p1} ${p2} ${p3}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"${dashAttr} />`
+        } else if (shape === 'hexagon') {
+          const cx = x + width / 2
+          const cy = y + height / 2
+          const r = Math.min(width, height) / 2
+          const points = Array.from({ length: 6 }).map((_, i) => {
+            const angle = (i * Math.PI) / 3
+            const px = (cx + r * Math.cos(angle)).toFixed(2)
+            const py = (cy + r * Math.sin(angle)).toFixed(2)
+            return `${px} ${py}`
+          }).join(' ')
+          svg += `<polygon points="${points}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"${dashAttr} />`
+        } else {
+          // square/default keeps aspect ratio
+          const size = Math.min(width, height)
+          const offsetX = x + (width - size) / 2
+          const offsetY = y + (height - size) / 2
+          svg += `<rect x="${offsetX}" y="${offsetY}" width="${size}" height="${size}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}"${dashAttr} />`
+        }
+
+        if (label) {
+          const textColor = sanitizeAttrValue(normalizeStrokeColor(strokeColor) || '#000000')
+          svg += `<text x="${x + width / 2}" y="${y + height / 2}" font-size="${fontSizeValue}" fill="${textColor}" opacity="${opacity}" text-anchor="middle" dominant-baseline="middle">${label}</text>`
+        }
+        break
+      }
+
       case 'circle': {
         const radius = Math.max(0, Math.min(width, height) / 2)
         svg += `<circle cx="${x + radius}" cy="${y + radius}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
@@ -650,37 +695,89 @@ function generatePNG(elements: Element[], stageConfig: StageConfig | null): Prom
       
       switch (type) {
       case 'rectangle':
-      case 'textbox':
+      case 'textbox': {
+        if (normalizedFill !== 'none') {
+          ctx.fillRect(x, y, width, height)
+        }
+        if (strokeWidth > 0 && normalizedStroke !== 'none') {
+          ctx.strokeRect(x, y, width, height)
+        }
+        if (type === 'textbox' && element.textBoxConfig?.fullText) {
+          ctx.fillStyle = normalizedStroke === 'none' ? '#000000' : normalizedStroke
+          ctx.globalAlpha = 1
+          ctx.font = `${fontSize ?? 16}px Arial`
+          ctx.textAlign = 'left'
+          ctx.textBaseline = 'top'
+          ctx.fillText(element.textBoxConfig.fullText, x + 8, y + 8)
+        }
+        break
+      }
+
       case 'object': {
-      if (normalizedFill !== 'none') {
-        ctx.fillRect(x, y, width, height)
-      }
-      if (strokeWidth > 0 && normalizedStroke !== 'none') {
-        ctx.strokeRect(x, y, width, height)
-      }
-      if (type === 'object') {
+        ctx.save()
+        // apply dash if present
+        const dashArray = getStrokeDashArray(element.strokeDasharray)
+        if (dashArray) {
+          ctx.setLineDash(dashArray)
+        }
+
+        const shape = normalizeObjectShape(element.objectShape)
+
+        if (shape === 'triangle') {
+          ctx.beginPath()
+          ctx.moveTo(x + width / 2, y)
+          ctx.lineTo(x, y + height)
+          ctx.lineTo(x + width, y + height)
+          ctx.closePath()
+        } else if (shape === 'hexagon') {
+          const r = Math.min(width, height) / 2
+          const cx = x + width / 2
+          const cy = y + height / 2
+          ctx.beginPath()
+          for (let i = 0; i < 6; i++) {
+            const angle = (i * Math.PI) / 3
+            const px = cx + r * Math.cos(angle)
+            const py = cy + r * Math.sin(angle)
+            if (i === 0) ctx.moveTo(px, py)
+            else ctx.lineTo(px, py)
+          }
+          ctx.closePath()
+        } else {
+          // square/default keeps aspect ratio
+          const size = Math.min(width, height)
+          const offsetX = x + (width - size) / 2
+          const offsetY = y + (height - size) / 2
+          ctx.beginPath()
+          ctx.rect(offsetX, offsetY, size, size)
+        }
+
+        if (normalizedFill !== 'none') {
+          ctx.fill()
+        }
+        if (strokeWidth > 0 && normalizedStroke !== 'none') {
+          ctx.stroke()
+        }
+
+        if (dashArray) {
+          ctx.setLineDash([])
+        }
+        ctx.restore()
+
+        // Draw centered initials/label
         const initials = (element as any).objectInitials || (element as any).objectName || ''
         if (initials) {
           ctx.save()
           ctx.globalAlpha = 1
           ctx.fillStyle = normalizedStroke === 'none' ? '#000000' : normalizedStroke
-          ctx.font = `${Math.max(12, fontSize ?? 16)}px Arial`
-          ctx.textAlign = 'left'
-          ctx.textBaseline = 'top'
-          ctx.fillText(String(initials), x + 8, y + 6)
+          const fontPx = Math.max(12, Math.min(width, height) * 0.3)
+          ctx.font = `bold ${fontPx}px Arial`
+          ctx.textAlign = 'center'
+          ctx.textBaseline = 'middle'
+          ctx.fillText(String(initials), x + width / 2, y + height / 2)
           ctx.restore()
         }
+        break
       }
-      if (type === 'textbox' && element.textBoxConfig?.fullText) {
-        ctx.fillStyle = normalizedStroke === 'none' ? '#000000' : normalizedStroke
-            ctx.globalAlpha = 1
-            ctx.font = `${fontSize ?? 16}px Arial`
-            ctx.textAlign = 'left'
-            ctx.textBaseline = 'top'
-            ctx.fillText(element.textBoxConfig.fullText, x + 8, y + 8)
-          }
-          break
-        }
         
         case 'circle': {
           const radius = Math.max(0, Math.min(width, height) / 2)
