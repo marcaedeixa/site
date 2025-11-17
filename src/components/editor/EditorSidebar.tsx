@@ -360,7 +360,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     <div className="h-full min-h-0 flex border-l border-gray-200 bg-white shadow-sm overflow-hidden">
       <Tabs value={activeTab} className="flex w-full h-full min-h-0">
         {/* Coluna de ícones */}
-        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50 rounded-none overflow-y-auto">
+        <TabsList className="flex flex-col items-center justify-start gap-3 w-12 min-w-12 h-full py-3 border-r bg-gray-50 rounded-none overflow-y-auto scrollbar-hide">
           <TabsTrigger value="properties" onClick={() => handleTabClick('properties')} className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200 data-[state=active]:bg-gray-300">
             <Settings className="h-4 w-4" />
           </TabsTrigger>

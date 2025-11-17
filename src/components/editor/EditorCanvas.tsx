@@ -1022,6 +1022,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
     // Prevent default for all mouse interactions to avoid conflicts
     e.preventDefault()
+
+    // Ignore middle button entirely (wheel click)
+    if (e.button === 1) {
+      e.stopPropagation()
+      return
+    }
     
     const canvasPoint = screenToCanvas(e.clientX, e.clientY)
     const clickedElement = getElementAtPoint(canvasPoint)
@@ -1040,11 +1046,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     const isPanGesture =
-      e.button === 1 ||
-      (e.button === 0 && isSpacePressed) ||
-      (e.button === 2 && (e.ctrlKey || e.metaKey))
+      e.button === 2 ||
+      (e.button === 0 && isSpacePressed)
 
-    // Handle middle mouse button, space+drag or ctrl/meta + right click for panning
+    // Handle middle/right mouse button or space+drag for panning
     if (isPanGesture) {
       e.stopPropagation()
 
@@ -3349,9 +3354,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onContextMenu={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault()
-          }
+          e.preventDefault()
         }}
         onTouchStart={(e) => {
           const isPinchAttempt = e.touches.length >= 2

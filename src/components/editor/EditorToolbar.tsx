@@ -181,7 +181,7 @@ export function EditorToolbar({
   }
 
   return (
-    <div className="bg-white border-l border-gray-200 px-2 py-4 flex flex-col gap-4 w-16 h-full min-h-0 overflow-y-auto">
+    <div className="bg-white border-l border-gray-200 px-2 py-4 flex flex-col gap-4 w-16 h-full min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide">
       {/* Drawing Tools */}
       <div className="flex flex-col gap-1">
         {tools.map((tool) => {
