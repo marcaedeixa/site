@@ -33,7 +33,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useParams } from 'next/navigation'
 
 interface EditorTopToolbarProps {
-  onSave: () => void
+  onSave: () => Promise<void> | void
   selectedElements: string[]
   onUnionElements: () => void
   onSubtractElements: () => void
@@ -228,6 +228,8 @@ export function EditorTopToolbar({
       const projectId = window.location.pathname.split('/').pop()
       
       if (!projectId) return
+
+      await Promise.resolve(onSave())
       
       const projectData = getProjectDataSnapshot()
       const data = await exportProjectData(projectId, format, sceneIndex, projectData)

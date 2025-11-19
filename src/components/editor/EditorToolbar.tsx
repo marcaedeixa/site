@@ -38,7 +38,7 @@ import { getProjectDataSnapshot } from '@/lib/editorSnapshot'
 
 interface EditorToolbarProps {
   selectedTool: Tool
-  onSave: () => void
+  onSave: () => Promise<void> | void
   selectedElements: string[]
   onGroupElements: () => void
   onUngroupElements: () => void
@@ -83,6 +83,8 @@ export function EditorToolbar({
       const projectId = window.location.pathname.split('/').pop()
       
       if (!projectId) return
+
+      await Promise.resolve(onSave())
       
       const projectData = getProjectDataSnapshot()
       const data = await exportProjectData(projectId, format, undefined, projectData)
