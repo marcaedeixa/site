@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { exportProjectData } from '@/lib/projectData'
+import { getProjectDataSnapshot } from '@/lib/editorSnapshot'
 import { useState, useEffect } from 'react'
 import { ActorModal } from './ActorModal'
 import { ObjectModal } from './ObjectModal'
@@ -228,7 +229,8 @@ export function EditorTopToolbar({
       
       if (!projectId) return
       
-      const data = await exportProjectData(projectId, format, sceneIndex)
+      const projectData = getProjectDataSnapshot()
+      const data = await exportProjectData(projectId, format, sceneIndex, projectData)
       
       // Determinar o nome do arquivo
       let fileName = 'projeto'

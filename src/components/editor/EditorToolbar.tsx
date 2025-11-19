@@ -34,6 +34,7 @@ import {
 import { Tool, useEditorStore } from '@/hooks/useEditorStore'
 import { cn } from '@/lib/utils'
 import { exportProjectData } from '@/lib/projectData'
+import { getProjectDataSnapshot } from '@/lib/editorSnapshot'
 
 interface EditorToolbarProps {
   selectedTool: Tool
@@ -83,7 +84,8 @@ export function EditorToolbar({
       
       if (!projectId) return
       
-      const data = await exportProjectData(projectId, format)
+      const projectData = getProjectDataSnapshot()
+      const data = await exportProjectData(projectId, format, undefined, projectData)
       
       const isZip = data instanceof Blob && data.type === 'application/zip'
       const extension = isZip ? 'zip' : format

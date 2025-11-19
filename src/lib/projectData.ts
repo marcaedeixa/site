@@ -87,8 +87,13 @@ export async function deleteProjectData(projectId: string): Promise<void> {
   }
 }
 
-export async function exportProjectData(projectId: string, format: 'json' | 'svg' | 'png', sceneIndex?: number): Promise<string | Blob> {
-  const data = await loadProjectData(projectId)
+export async function exportProjectData(
+  projectId: string,
+  format: 'json' | 'svg' | 'png',
+  sceneIndex?: number,
+  projectDataOverride?: ProjectData
+): Promise<string | Blob> {
+  const data = projectDataOverride ?? await loadProjectData(projectId)
   
   if (!data) {
     throw new Error('Nenhum dado encontrado para este projeto')
