@@ -12,7 +12,8 @@ import {
   Loader2,
   Settings,
   RefreshCw,
-  Trash2
+  Trash2,
+  Crown
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,8 @@ import { CreateProjectModal } from '@/components/CreateProjectModal'
 import { getProjects, deleteProject } from '@/lib/projects'
 import DebugAuth from '@/components/DebugAuth'
 import ProjectCardSkeleton from '@/components/ProjectCardSkeleton'
+import { TrialWarningBanner } from '@/components/SubscriptionGate'
+import { useTrialStatus, getStatusMessage, getStatusColor } from '@/hooks/useTrialStatus'
 
 interface Project {
   id: string
@@ -56,6 +59,7 @@ export default function DashboardPage() {
   const router = useRouter()
 
   const { signOut, user, loading: authLoading } = useAuth()
+  const trialStatus = useTrialStatus(user)
 
   const handleLogout = async () => {
     await signOut()
@@ -239,6 +243,8 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background">
       <DebugAuth />
+      {/* Trial Warning Banner */}
+      <TrialWarningBanner user={user} />
       {/* Header */}
       <header className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -281,7 +287,7 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
@@ -290,6 +296,71 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium text-muted-foreground">Total de Projetos</p>
                   <p className="text-2xl font-bold text-foreground">{projects.length}</p>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+          
+          {/* Subscription Status Card */}
+          <Card className={`${
+            getStatusColor(trialStatus) === 'green' ? 'border-green-200 bg-green-50' :
+            getStatusColor(trialStatus) === 'yellow' ? 'border-yellow-200 bg-yellow-50' :
+            getStatusColor(trialStatus) === 'red' ? 'border-red-200 bg-red-50' :
+            ''
+          }`}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Crown className={`h-8 w-8 ${
+                    getStatusColor(trialStatus) === 'green' ? 'text-green-600' :
+                    getStatusColor(trialStatus) === 'yellow' ? 'text-yellow-600' :
+                    getStatusColor(trialStatus) === 'red' ? 'text-red-600' :
+                    'text-gray-400'
+                  }`} />
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-muted-foreground">Assinatura</p>
+                    <p className={`text-lg font-semibold ${
+                      getStatusColor(trialStatus) === 'green' ? 'text-green-700' :
+                      getStatusColor(trialStatus) === 'yellow' ? 'text-yellow-700' :
+                      getStatusColor(trialStatus) === 'red' ? 'text-red-700' :
+                      'text-foreground'
+                    }`}>
+                      {trialStatus.isLoading ? 'Carregando...' : 
+                       trialStatus.planName || (trialStatus.isTrialing ? 'Período de Teste' : 'Sem assinatura')}
+                    </p>
+                    {!trialStatus.isLoading && (
+                      <p className={`text-sm ${
+                        getStatusColor(trialStatus) === 'green' ? 'text-green-600' :
+                        getStatusColor(trialStatus) === 'yellow' ? 'text-yellow-600' :
+                        getStatusColor(trialStatus) === 'red' ? 'text-red-600' :
+                        'text-muted-foreground'
+                      }`}>
+                        {getStatusMessage(trialStatus)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {!trialStatus.isLoading && (!trialStatus.hasActiveSubscription || trialStatus.isTrialing) && (
+                  <Button 
+                    size="sm"
+                    onClick={() => router.push('/plans')}
+                    className={`${
+                      trialStatus.isExpired 
+                        ? 'bg-red-600 hover:bg-red-700' 
+                        : 'bg-violet-600 hover:bg-violet-700'
+                    }`}
+                  >
+                    {trialStatus.isExpired ? 'Reativar' : 'Fazer Upgrade'}
+                  </Button>
+                )}
+                {!trialStatus.isLoading && trialStatus.hasActiveSubscription && !trialStatus.isTrialing && (
+                  <Button 
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push('/dashboard/subscription')}
+                  >
+                    Gerenciar
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

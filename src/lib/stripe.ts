@@ -44,33 +44,34 @@ export const getStripe = () => {
 // Stripe configuration constants
 export const STRIPE_CONFIG = {
   mode: process.env.STRIPE_MODE || 'test',
-  currency: 'usd',
+  currency: 'brl',
   successUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/subscription/success`,
-  cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pricing`,
+  cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/plans`,
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  trialDays: 7, // Período de teste gratuito
 } as const;
 
 // Stripe product and price configurations
 export const STRIPE_PLANS = {
   basic: {
     name: 'Plano Básico',
-    description: 'Acesso a funcionalidades básicas',
+    description: 'Ideal para começar a organizar suas marcações',
     features: [
       'Até 10 projetos',
+      'Editor completo',
+      'Exportação básica',
       'Suporte por email',
-      'Dashboard básico',
-      'Relatórios mensais'
     ],
     prices: {
       monthly: {
-        amount: 1999, // $19.99 in cents
+        amount: 2990, // R$ 29,90 em centavos
         interval: 'month' as const,
-        priceId: 'price_basic_monthly', // Will be replaced with actual Stripe price ID
+        priceId: 'price_1SLHGERZnrK82RAyBnFueMkV',
       },
       yearly: {
-        amount: 19999, // $199.99 in cents (2 months free)
+        amount: 45099, // R$ 450,99 em centavos
         interval: 'year' as const,
-        priceId: 'price_basic_yearly', // Will be replaced with actual Stripe price ID
+        priceId: 'price_1SLGe1RZnrK82RAy4pnPa7aH',
       },
     },
   },
@@ -79,22 +80,22 @@ export const STRIPE_PLANS = {
     description: 'Acesso completo a todas as funcionalidades',
     features: [
       'Projetos ilimitados',
+      'Editor avançado',
+      'Exportação em alta qualidade',
       'Suporte prioritário',
-      'Dashboard avançado',
-      'Relatórios em tempo real',
-      'API access',
-      'Integrações avançadas'
+      'Templates exclusivos',
+      'Colaboração em equipe',
     ],
     prices: {
       monthly: {
-        amount: 4999, // $49.99 in cents
+        amount: 5990, // R$ 59,90 em centavos
         interval: 'month' as const,
-        priceId: 'price_premium_monthly', // Will be replaced with actual Stripe price ID
+        priceId: 'price_1SLHGFRZnrK82RAyJ9eyQbwO',
       },
       yearly: {
-        amount: 49999, // $499.99 in cents (2 months free)
+        amount: 59900, // R$ 599,00 em centavos
         interval: 'year' as const,
-        priceId: 'price_premium_yearly', // Will be replaced with actual Stripe price ID
+        priceId: 'price_1SLHGGRZnrK82RAyRidf20Su',
       },
     },
   },

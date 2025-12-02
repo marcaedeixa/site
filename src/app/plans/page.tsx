@@ -108,9 +108,9 @@ export default function PlansPage() {
       // For paid plans, use Stripe
       let stripePrice = ''
       if (plan.name.includes('Básico')) {
-        stripePrice = 'price_basic_monthly' // Replace with actual Stripe price ID
+        stripePrice = 'price_1SLHGERZnrK82RAyBnFueMkV' // Plano Básico Mensal - R$ 29,90
       } else if (plan.name.includes('Premium')) {
-        stripePrice = 'price_premium_monthly' // Replace with actual Stripe price ID
+        stripePrice = 'price_1SLHGFRZnrK82RAyJ9eyQbwO' // Plano Premium Mensal - R$ 59,90
       }
 
       if (!stripePrice) {

@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/hooks/useAuth'
 import { useState } from 'react'
-import { ChevronDown, ChevronUp, Play, Users, Image, Presentation, Palette, Download, Eye, Check, Crown, Shield, Star } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { ChevronDown, ChevronUp, Play, Users, Image, Presentation, Palette, Download, Eye } from 'lucide-react'
+import PricingSection from '@/components/stripe/PricingSection'
 
 export default function Home() {
   const router = useRouter()
@@ -58,82 +58,6 @@ export default function Home() {
       description: "Salve e compartilhe suas criações facilmente"
     }
   ]
-
-  const plans = [
-    {
-      name: 'Plano Gratuito',
-      price: 0,
-      interval: 'mês',
-      description: 'Perfeito para começar',
-      features: [
-        'Até 3 projetos',
-        'Funcionalidades básicas',
-        'Suporte por email',
-        'Marca d\'água'
-      ],
-      icon: <Star className="w-8 h-8 text-yellow-600" />,
-      buttonText: 'Começar Grátis',
-      buttonVariant: 'outline' as const,
-      popular: false
-    },
-    {
-      name: 'Plano Básico',
-      price: 29.90,
-      interval: 'mês',
-      description: 'Para usuários regulares',
-      features: [
-        'Até 10 projetos',
-        'Suporte por email',
-        'Dashboard básico',
-        'Relatórios mensais'
-      ],
-      icon: <Shield className="w-8 h-8 text-blue-600" />,
-      buttonText: 'Assinar Básico',
-      buttonVariant: 'default' as const,
-      popular: false
-    },
-    {
-      name: 'Plano Premium',
-      price: 59.90,
-      interval: 'mês',
-      description: 'Para profissionais',
-      features: [
-        'Projetos ilimitados',
-        'Suporte prioritário',
-        'Dashboard avançado',
-        'Relatórios em tempo real',
-        'API access',
-        'Integrações avançadas'
-      ],
-      icon: <Crown className="w-8 h-8 text-purple-600" />,
-      buttonText: 'Assinar Premium',
-      buttonVariant: 'default' as const,
-      popular: true
-    }
-  ]
-
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(price)
-  }
-
-  const handlePlanClick = (planType: 'free' | 'basic' | 'premium') => {
-    if (planType === 'free') {
-      if (user) {
-        router.push('/dashboard')
-      } else {
-        router.push('/login')
-      }
-    } else {
-      if (user) {
-        router.push('/plans')
-      } else {
-        router.push(`/login?plan=${planType}`)
-      }
-    }
-  }
 
   const faqs = [
     {
@@ -340,77 +264,12 @@ export default function Home() {
       </section>
 
       {/* Planos */}
-      <section id="planos" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-              Escolha Seu Plano
-            </h2>
-            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-              Encontre o plano perfeito para suas necessidades e comece a criar narrativas visuais incríveis hoje mesmo.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {plans.map((plan, index) => (
-              <Card key={index} className={`relative p-6 hover:shadow-xl transition-all duration-300 ${
-                plan.popular ? 'ring-2 ring-purple-500 scale-105' : 'hover:scale-105'
-              }`}>
-                {plan.popular && (
-                  <Badge className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-purple-500 text-white px-4 py-1">
-                    Mais Popular
-                  </Badge>
-                )}
-                
-                <CardHeader className="text-center pb-8">
-                  <div className="mb-4 flex justify-center">{plan.icon}</div>
-                  <CardTitle className="text-2xl font-bold">{plan.name}</CardTitle>
-                  <CardDescription className="text-base mt-2">{plan.description}</CardDescription>
-                  <div className="mt-4">
-                    <span className="text-4xl font-bold text-gray-900">
-                      {plan.price === 0 ? 'Grátis' : formatPrice(plan.price)}
-                    </span>
-                    {plan.price > 0 && (
-                      <span className="text-gray-600 ml-1">/{plan.interval}</span>
-                    )}
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="space-y-6">
-                  <ul className="space-y-3">
-                    {plan.features.map((feature, featureIndex) => (
-                      <li key={featureIndex} className="flex items-center">
-                        <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                        <span className="text-gray-700">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  
-                  <Button 
-                    onClick={() => handlePlanClick(
-                      plan.name === 'Plano Gratuito' ? 'free' : 
-                      plan.name === 'Plano Básico' ? 'basic' : 'premium'
-                    )}
-                    variant={plan.buttonVariant}
-                    className={`w-full py-3 text-lg font-semibold ${
-                      plan.popular 
-                        ? 'bg-purple-600 hover:bg-purple-700 text-white' 
-                        : plan.buttonVariant === 'outline' 
-                          ? 'border-2 border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {user ? (
-                      plan.name === 'Plano Gratuito' ? 'Ir para Dashboard' : 'Fazer Upgrade'
-                    ) : (
-                      plan.name === 'Plano Gratuito' ? 'Começar Grátis' : `Assinar ${plan.name.replace('Plano ', '')}`
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
+      <section id="planos" className="bg-gray-50">
+        <PricingSection 
+          userId={user?.id}
+          userEmail={user?.email}
+          showTrialOption={true}
+        />
       </section>
 
       {/* FAQ */}

@@ -11,7 +11,7 @@ const adminPublicRoutes = ['/admin/login']
 // Rotas que requerem verificação de assinatura
 const subscriptionRoutes = ['/dashboard']
 // Rotas públicas (não requerem assinatura)
-const publicRoutes = ['/', '/login', '/register', '/plans', '/pricing']
+const publicRoutes = ['/', '/login', '/register', '/plans', '/pricing', '/checkout', '/auth']
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl

@@ -1,15 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextRequest, NextResponse } from 'next/server'
 
-// Rotas que requerem assinatura ativa do Stripe
+// Rotas que requerem assinatura ativa do Stripe (ou trial)
 const STRIPE_PROTECTED_ROUTES = [
-  '/dashboard/premium',
-  '/dashboard/analytics',
-  '/dashboard/integrations',
-  '/api/premium'
+  '/dashboard',
+  '/dashboard/editor',
 ]
 
-// Rotas que requerem plano premium
+// Rotas que requerem plano premium (não acessíveis durante trial)
 const PREMIUM_ONLY_ROUTES = [
   '/dashboard/premium',
   '/dashboard/analytics',
@@ -20,7 +18,15 @@ const PREMIUM_ONLY_ROUTES = [
 // Rotas que permitem período de teste
 const TRIAL_ALLOWED_ROUTES = [
   '/dashboard',
+  '/dashboard/editor',
   '/dashboard/projects',
+  '/dashboard/settings',
+  '/dashboard/subscription'
+]
+
+// Rotas excluídas da verificação de assinatura (sempre acessíveis após login)
+const SUBSCRIPTION_EXEMPT_ROUTES = [
+  '/dashboard/subscription',
   '/dashboard/settings'
 ]
 
@@ -29,6 +35,11 @@ export async function checkStripeSubscription(
   response: NextResponse
 ): Promise<NextResponse> {
   const pathname = request.nextUrl.pathname
+
+  // Skip check for exempt routes (always accessible after login)
+  if (SUBSCRIPTION_EXEMPT_ROUTES.some(route => pathname.startsWith(route))) {
+    return response
+  }
 
   // Skip check for non-protected routes
   if (!STRIPE_PROTECTED_ROUTES.some(route => pathname.startsWith(route))) {
