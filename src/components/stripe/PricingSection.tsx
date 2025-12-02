@@ -89,12 +89,13 @@ export default function PricingSection({
   const displayPlans = showTrialOption ? plans : plans.filter(p => p.key !== 'trial')
 
   const handleSelectPlan = async (plan: typeof plans[0]) => {
-    if (!userId) {
-      router.push('/login?redirect=/plans')
-      return
-    }
-
     if (plan.key === 'trial') {
+      // Para trial, precisa estar logado
+      if (!userId) {
+        router.push('/login?redirect=/plans')
+        return
+      }
+      
       // Iniciar trial
       setLoading('trial')
       try {
@@ -118,11 +119,12 @@ export default function PricingSection({
       return
     }
 
-    // Para planos pagos, usar callback ou navegar para checkout
+    // Para planos pagos, ir direto para checkout (cadastro durante o processo)
     if (onSelectPlan) {
       onSelectPlan(plan.priceId, plan.name)
     } else {
-      router.push(`/checkout?priceId=${plan.priceId}&plan=${plan.key}`)
+      // Inclui o intervalo na URL para manter a seleção
+      router.push(`/checkout?plan=${plan.key}&interval=${billingInterval}`)
     }
   }
 
@@ -174,15 +176,15 @@ export default function PricingSection({
         </div>
 
         {/* Billing Toggle */}
-        <div className="flex justify-center mb-10">
-          <div className="bg-gray-100 p-1 rounded-xl inline-flex">
+        <div className="flex flex-col items-center mb-10">
+          <div className="bg-white border-2 border-gray-200 p-1.5 rounded-2xl inline-flex shadow-lg">
             <button
               onClick={() => setBillingInterval('monthly')}
               className={cn(
-                'px-6 py-2 rounded-lg text-sm font-medium transition-all',
+                'px-8 py-3 rounded-xl text-base font-semibold transition-all',
                 billingInterval === 'monthly'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-violet-600 text-white shadow-md'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               )}
             >
               Mensal
@@ -190,18 +192,28 @@ export default function PricingSection({
             <button
               onClick={() => setBillingInterval('yearly')}
               className={cn(
-                'px-6 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2',
+                'px-8 py-3 rounded-xl text-base font-semibold transition-all flex items-center gap-2',
                 billingInterval === 'yearly'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'bg-violet-600 text-white shadow-md'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               )}
             >
               Anual
-              <Badge className="bg-green-100 text-green-700 text-xs">
-                Até 25% off
-              </Badge>
+              <span className={cn(
+                'text-xs px-2 py-0.5 rounded-full font-bold',
+                billingInterval === 'yearly'
+                  ? 'bg-green-400 text-green-900'
+                  : 'bg-green-100 text-green-700'
+              )}>
+                -25%
+              </span>
             </button>
           </div>
+          <p className="text-sm text-gray-500 mt-3">
+            {billingInterval === 'yearly' 
+              ? '✨ Você está economizando até 25% com o plano anual!' 
+              : 'Economize até 25% escolhendo o plano anual'}
+          </p>
         </div>
 
         {/* Plans Grid */}
