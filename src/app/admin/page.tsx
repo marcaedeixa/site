@@ -171,6 +171,7 @@ export default function AdminPage() {
   // Sidebar de navegação
   const sidebarItems = [
     { icon: BarChart3, label: 'Dashboard', href: '/admin', active: true },
+    { icon: Eye, label: 'Landing Page', href: '/admin/landing' },
     { icon: Users, label: 'Clientes', href: '/admin/customers' },
     { icon: CreditCard, label: 'Stripe', href: '/admin/stripe' },
     { icon: Database, label: 'Supabase', href: '/admin/settings/supabase' },
@@ -441,7 +442,21 @@ export default function AdminPage() {
           </div>
 
           {/* Ações Rápidas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/admin/landing')}>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-3 bg-black rounded-lg">
+                    <Eye className="h-6 w-6 text-white" />
+                  </div>
+                  <div className="ml-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Landing Page</h3>
+                    <p className="text-sm text-gray-600">Editar conteúdo do site</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={navigateToUsers}>
               <CardContent className="p-6">
                 <div className="flex items-center">
@@ -455,8 +470,6 @@ export default function AdminPage() {
                 </div>
               </CardContent>
             </Card>
-            
-
             
             <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigateToSettings('supabase')}>
               <CardContent className="p-6">
@@ -475,8 +488,8 @@ export default function AdminPage() {
             <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/admin/subscriptions')}>
               <CardContent className="p-6">
                 <div className="flex items-center">
-                  <div className="p-3 bg-purple-100 rounded-lg">
-                    <CreditCard className="h-6 w-6 text-purple-600" />
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <CreditCard className="h-6 w-6 text-green-600" />
                   </div>
                   <div className="ml-4">
                     <h3 className="text-lg font-semibold text-gray-900">Gerenciar Assinaturas</h3>
