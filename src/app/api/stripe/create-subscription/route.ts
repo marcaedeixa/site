@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerStripe, STRIPE_CONFIG } from '@/lib/stripe'
-import { createOrRetrieveStripeCustomer } from '@/lib/stripe-config'
+import { getServerStripe, STRIPE_CONFIG, getPlanByPriceId } from '@/lib/stripe'
+import { createOrRetrieveStripeCustomer, saveSubscriptionToDatabase } from '@/lib/stripe-config'
+import { createClient } from '@supabase/supabase-js'
+
+// Get supabase client with service role
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,6 +41,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Also check for trialing subscriptions
+    const trialingSubscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: 'trialing',
+      limit: 1,
+    })
+
+    if (trialingSubscriptions.data.length > 0) {
+      return NextResponse.json(
+        { error: 'Você já possui um período de teste ativo' },
+        { status: 400 }
+      )
+    }
+
     // Create the subscription with trial period
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
@@ -50,6 +73,44 @@ export async function POST(request: NextRequest) {
         trial_period_days: STRIPE_CONFIG.trialDays,
       } : {}),
     })
+
+    // Get the customer's internal ID from stripe_customers table
+    const supabase = getSupabase()
+    const { data: stripeCustomer } = await supabase
+      .from('stripe_customers')
+      .select('id')
+      .eq('stripe_customer_id', customerId)
+      .single()
+
+    // Save subscription to database immediately (don't wait for webhook)
+    if (stripeCustomer) {
+      const planInfo = getPlanByPriceId(priceId)
+      const planName = planInfo?.plan?.name || 'Unknown Plan'
+      
+      try {
+        await supabase
+          .from('stripe_subscriptions')
+          .upsert({
+            customer_id: stripeCustomer.id,
+            stripe_subscription_id: subscription.id,
+            stripe_customer_id: customerId,
+            status: subscription.status,
+            plan_id: priceId,
+            plan_name: planName,
+            current_period_start: new Date(subscription.current_period_start * 1000),
+            current_period_end: new Date(subscription.current_period_end * 1000),
+            cancel_at_period_end: subscription.cancel_at_period_end,
+            trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
+            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+          }, {
+            onConflict: 'stripe_subscription_id'
+          })
+        console.log('Subscription saved to database:', subscription.id)
+      } catch (dbError) {
+        console.error('Error saving subscription to database:', dbError)
+        // Continue anyway, webhook will sync later
+      }
+    }
 
     // Get the client secret from the payment intent
     const invoice = subscription.latest_invoice as any

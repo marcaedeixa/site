@@ -60,24 +60,70 @@ export function useTrialStatus(user: User | null): TrialStatus & { refresh: () =
 
     try {
       // First check Stripe subscriptions
-      const { data: stripeCustomer, error: customerError } = await supabase
+      let { data: stripeCustomer } = await supabase
         .from('stripe_customers')
         .select('id')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle()
 
+      // Try to sync and check Stripe subscriptions
+      const userEmail = user.email
+      let subscription = null
+
+      // Always try to get local subscription first if customer exists
       if (stripeCustomer) {
-        // Get subscription from Stripe tables
-        const { data: subscription, error: subError } = await supabase
+        const { data: localSub } = await supabase
           .from('stripe_subscriptions')
           .select('*')
           .eq('customer_id', stripeCustomer.id)
           .in('status', ['active', 'trialing', 'past_due'])
           .order('created_at', { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
+        
+        subscription = localSub
+      }
 
-        if (subscription) {
+      // If no local subscription found, try to sync from Stripe
+      if (!subscription && userEmail) {
+        try {
+          const syncResponse = await fetch('/api/stripe/sync-subscription', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, email: userEmail }),
+          })
+          
+          if (syncResponse.ok) {
+            const syncData = await syncResponse.json()
+            if (syncData.synced > 0) {
+              // Re-fetch customer and subscription after sync
+              const { data: syncedCustomer } = await supabase
+                .from('stripe_customers')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle()
+              
+              if (syncedCustomer) {
+                stripeCustomer = syncedCustomer
+                const { data: syncedSubscription } = await supabase
+                  .from('stripe_subscriptions')
+                  .select('*')
+                  .eq('customer_id', syncedCustomer.id)
+                  .in('status', ['active', 'trialing', 'past_due'])
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle()
+                
+                subscription = syncedSubscription
+              }
+            }
+          }
+        } catch (syncError) {
+          console.error('Error syncing subscription:', syncError)
+        }
+      }
+
+      if (subscription) {
           const now = new Date()
           const isTrialing = subscription.status === 'trialing'
           const trialEnd = subscription.trial_end ? new Date(subscription.trial_end) : null
@@ -107,7 +153,6 @@ export function useTrialStatus(user: User | null): TrialStatus & { refresh: () =
           })
           return
         }
-      }
 
       // Check legacy subscription system
       const { data: legacySubscription, error: legacyError } = await supabase
@@ -120,7 +165,7 @@ export function useTrialStatus(user: User | null): TrialStatus & { refresh: () =
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (legacySubscription) {
         const now = new Date()

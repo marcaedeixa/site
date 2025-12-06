@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, CheckCircle, AlertTriangle, Lock, CreditCard } from 'lucide-react'
+import { Loader2, CheckCircle, AlertTriangle, Lock, CreditCard, Gift } from 'lucide-react'
 import { STRIPE_PLANS, formatCurrency } from '@/lib/stripe'
 
 // Initialize Stripe
@@ -132,6 +132,7 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [isTrialing, setIsTrialing] = useState(false)
 
   // Get plan details from price ID
   const getPlanDetails = () => {
@@ -154,6 +155,7 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
       try {
         setLoading(true)
         setError(null)
+        setIsTrialing(false)
 
         const response = await fetch('/api/stripe/create-subscription', {
           method: 'POST',
@@ -172,7 +174,13 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
           throw new Error(data.error || 'Erro ao criar assinatura')
         }
 
-        setClientSecret(data.clientSecret)
+        // Check if subscription is in trial mode (no payment required yet)
+        if (data.status === 'trialing') {
+          setIsTrialing(true)
+          setSuccess(true)
+        } else {
+          setClientSecret(data.clientSecret)
+        }
       } catch (err: any) {
         setError(err.message || 'Erro ao inicializar checkout')
       } finally {
@@ -220,16 +228,24 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
     return (
       <Card className="max-w-lg mx-auto">
         <CardContent className="flex flex-col items-center justify-center py-12">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+          <div className={`w-16 h-16 ${isTrialing ? 'bg-violet-100' : 'bg-green-100'} rounded-full flex items-center justify-center mb-4`}>
+            {isTrialing ? (
+              <Gift className="w-10 h-10 text-violet-600" />
+            ) : (
+              <CheckCircle className="w-10 h-10 text-green-600" />
+            )}
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Pagamento Confirmado!</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            {isTrialing ? 'Período de Teste Ativado!' : 'Pagamento Confirmado!'}
+          </h3>
           <p className="text-gray-600 text-center mb-6">
-            Sua assinatura foi ativada com sucesso.
+            {isTrialing 
+              ? 'Seu período de teste gratuito de 7 dias foi ativado com sucesso. Aproveite todos os recursos do plano!' 
+              : 'Sua assinatura foi ativada com sucesso.'}
           </p>
           <Button 
             onClick={() => window.location.href = '/dashboard'}
-            className="bg-green-600 hover:bg-green-700"
+            className={isTrialing ? 'bg-violet-600 hover:bg-violet-700' : 'bg-green-600 hover:bg-green-700'}
           >
             Ir para o Dashboard
           </Button>
