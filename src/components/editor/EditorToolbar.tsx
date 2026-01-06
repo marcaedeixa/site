@@ -1,15 +1,22 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { 
-  MousePointer2, 
-  Square, 
-  Circle, 
-  Minus, 
-  ArrowRight, 
-  Type, 
-  PenTool, 
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Slider } from '@/components/ui/slider'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  MousePointer2,
+  Square,
+  Circle,
+  Minus,
+  ArrowRight,
+  Type,
+  PenTool,
   Eraser,
   Group,
   Ungroup,
@@ -55,14 +62,14 @@ const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>
   { id: 'circle', icon: Circle, label: 'Círculo', shortcut: 'C' },
   { id: 'line', icon: Minus, label: 'Linha', shortcut: 'L' },
   { id: 'arrow', icon: ArrowRight, label: 'Seta', shortcut: 'A' },
-  { id: 'text', icon: Type, label: 'Texto', shortcut: 'T' },
-  { id: 'textbox', icon: FileText, label: 'Caixa de Texto', shortcut: 'B' },
+
+
   { id: 'pen', icon: PenTool, label: 'Caneta', shortcut: 'P' },
   { id: 'eraser', icon: Eraser, label: 'Borracha', shortcut: 'E' },
 ]
 
-export function EditorToolbar({ 
-  selectedTool, 
+export function EditorToolbar({
+  selectedTool,
   onSave,
   selectedElements,
   onGroupElements,
@@ -73,29 +80,86 @@ export function EditorToolbar({
   onExcludeElements,
   booleanOpsEnabled = true
 }: EditorToolbarProps) {
+  const [showTextBoxDialog, setShowTextBoxDialog] = useState(false)
+  const [textBoxConfig, setTextBoxConfig] = useState({
+    text: '',
+    width: 200,
+    fontSize: 16,
+    previewMode: 'full' as 'full' | 'start' | 'end' | 'start-end'
+  })
+
   const handleToolSelect = (tool: Tool) => {
     const { setSelectedTool } = useEditorStore.getState()
     setSelectedTool(tool)
   }
 
+  const handleAddTextBox = () => {
+    if (!textBoxConfig.text.trim()) return
+
+    const { viewport, addElement } = useEditorStore.getState()
+    const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
+    const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
+
+    const lineHeight = textBoxConfig.fontSize * 1.2
+    const padding = 16
+    const defaultHeight = Math.max(textBoxConfig.fontSize * 1.5, lineHeight + padding)
+
+    addElement({
+      type: 'textbox',
+      x: centerX - textBoxConfig.width / 2,
+      y: centerY - 20,
+      width: textBoxConfig.width,
+      height: defaultHeight,
+      text: textBoxConfig.text,
+      fontSize: textBoxConfig.fontSize,
+      strokeColor: '#000000',
+      fillColor: 'transparent',
+      strokeWidth: 1,
+      opacity: 1,
+      zIndex: 1000,
+      textBoxConfig: {
+        previewMode: textBoxConfig.previewMode,
+        fullText: textBoxConfig.text
+      }
+    } as any)
+
+    setTextBoxConfig({
+      text: '',
+      width: 200,
+      fontSize: 16,
+      previewMode: 'full'
+    })
+    setShowTextBoxDialog(false)
+  }
+
+  const getPreviewText = (text: string, mode: string) => {
+    if (mode === 'full' || text.length <= 20) return text
+    switch (mode) {
+      case 'start': return text.substring(0, 15) + '...'
+      case 'end': return '...' + text.substring(text.length - 15)
+      case 'start-end': return text.substring(0, 8) + '...' + text.substring(text.length - 8)
+      default: return text
+    }
+  }
+
   const handleExport = async (format: 'json' | 'svg' | 'png') => {
     try {
       const projectId = window.location.pathname.split('/').pop()
-      
+
       if (!projectId) return
 
       await Promise.resolve(onSave())
-      
+
       const projectData = getProjectDataSnapshot()
       const data = await exportProjectData(projectId, format, undefined, projectData)
-      
+
       const isZip = data instanceof Blob && data.type === 'application/zip'
       const extension = isZip ? 'zip' : format
       const downloadBaseName = isZip ? 'projeto-cenas' : 'projeto'
 
       if (typeof data === 'string') {
-        const blob = new Blob([data], { 
-          type: format === 'json' ? 'application/json' : 'image/svg+xml' 
+        const blob = new Blob([data], {
+          type: format === 'json' ? 'application/json' : 'image/svg+xml'
         })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -118,9 +182,9 @@ export function EditorToolbar({
 
   const handleZoom = (direction: 'in' | 'out' | 'reset') => {
     const { viewport, setViewport } = useEditorStore.getState()
-    
+
     let newZoom = viewport.zoom
-    
+
     switch (direction) {
       case 'in':
         newZoom = Math.min(viewport.zoom * 1.2, 5)
@@ -132,13 +196,13 @@ export function EditorToolbar({
         newZoom = 1
         break
     }
-    
+
     setViewport({ ...viewport, zoom: newZoom })
   }
 
   const handleCopy = () => {
     const { selectedElements, duplicateElements } = useEditorStore.getState()
-    
+
     if (selectedElements.length > 0) {
       duplicateElements(selectedElements)
     }
@@ -146,7 +210,7 @@ export function EditorToolbar({
 
   const handleDelete = () => {
     const { selectedElements, deleteElements } = useEditorStore.getState()
-    
+
     if (selectedElements.length > 0) {
       deleteElements(selectedElements)
     }
@@ -154,7 +218,7 @@ export function EditorToolbar({
 
   const handleBringToFront = () => {
     const { selectedElements, bringToFront } = useEditorStore.getState()
-    
+
     if (selectedElements.length > 0) {
       bringToFront(selectedElements)
     }
@@ -162,7 +226,7 @@ export function EditorToolbar({
 
   const handleSendToBack = () => {
     const { selectedElements, sendToBack } = useEditorStore.getState()
-    
+
     if (selectedElements.length > 0) {
       sendToBack(selectedElements)
     }
@@ -170,7 +234,7 @@ export function EditorToolbar({
 
   const handleBringForward = () => {
     const { selectedElements, bringForward } = useEditorStore.getState()
-    
+
     if (selectedElements.length > 0) {
       bringForward(selectedElements)
     }
@@ -178,7 +242,7 @@ export function EditorToolbar({
 
   const handleSendBackward = () => {
     const { selectedElements, sendBackward } = useEditorStore.getState()
-    
+
     if (selectedElements.length > 0) {
       sendBackward(selectedElements)
     }
@@ -207,6 +271,127 @@ export function EditorToolbar({
           )
         })}
       </div>
+
+      <Separator orientation="horizontal" className="w-full" />
+
+      {/* Add Text Box Button */}
+      <Dialog open={showTextBoxDialog} onOpenChange={setShowTextBoxDialog}>
+        <DialogTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            title="Adicionar Caixa de Texto (B)"
+            className="w-12 h-12 p-0 hover:bg-purple-100"
+          >
+            <Type className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Type className="h-4 w-4" />
+              Nova Caixa de Texto
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="text">Texto</Label>
+              <Textarea
+                id="text"
+                value={textBoxConfig.text}
+                onChange={(e) => setTextBoxConfig(prev => ({ ...prev, text: e.target.value }))}
+                placeholder="Digite o texto aqui..."
+                className="min-h-[80px]"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Configurações</h4>
+
+              <div>
+                <Label className="text-xs">Largura: {textBoxConfig.width}px</Label>
+                <Slider
+                  value={[textBoxConfig.width]}
+                  onValueChange={([value]) => setTextBoxConfig(prev => ({ ...prev, width: value }))}
+                  min={100}
+                  max={500}
+                  step={10}
+                  className="mt-2"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs">Tamanho da Fonte: {textBoxConfig.fontSize}px</Label>
+                <Slider
+                  value={[textBoxConfig.fontSize]}
+                  onValueChange={([value]) => setTextBoxConfig(prev => ({ ...prev, fontSize: value }))}
+                  min={8}
+                  max={48}
+                  step={1}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium">Prévia</h4>
+
+              <div>
+                <Label className="text-xs">Modo de Exibição</Label>
+                <Select
+                  value={textBoxConfig.previewMode}
+                  onValueChange={(value: any) => setTextBoxConfig(prev => ({ ...prev, previewMode: value }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full">Mostrar texto completo</SelectItem>
+                    <SelectItem value="start">Mostrar início do texto</SelectItem>
+                    <SelectItem value="end">Mostrar final do texto</SelectItem>
+                    <SelectItem value="start-end">Mostrar início e final</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {textBoxConfig.text && (
+                <div className="p-3 bg-gray-50 rounded border">
+                  <Label className="text-xs text-gray-600">Prévia:</Label>
+                  <div
+                    className="mt-1 text-sm"
+                    style={{
+                      fontSize: `${Math.min(textBoxConfig.fontSize, 14)}px`,
+                      width: `${Math.min(textBoxConfig.width, 200)}px`,
+                      wordWrap: 'break-word'
+                    }}
+                  >
+                    {getPreviewText(textBoxConfig.text, textBoxConfig.previewMode)}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => setShowTextBoxDialog(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAddTextBox}
+                disabled={!textBoxConfig.text.trim()}
+              >
+                Adicionar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Separator orientation="horizontal" className="w-full" />
 
