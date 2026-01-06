@@ -1,4 +1,4 @@
-  'use client'
+'use client'
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
@@ -14,7 +14,7 @@ import { ActorsTab } from './ActorsTab'
 import { ObjectsTab } from './ObjectsTab'
 import { DeixaTab } from './DeixaTab'
 import { ToolsTab } from './ToolsTab'
-import { 
+import {
   Palette, Settings, Layers, Users, Box, Lock, Unlock, Theater, MessageSquare, MoreHorizontal,
   AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyStart, AlignVerticalJustifyCenter,
   AlignVerticalJustifyEnd, AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter, Group, Ungroup,
@@ -34,6 +34,11 @@ const colorPresets = [
 
 export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSidebarProps) {
   const [activeTab, setActiveTab] = useState('properties')
+  const [dimensionLocked, setDimensionLocked] = useState(false)
+  const [editingWidth, setEditingWidth] = useState<string>('')
+  const [editingHeight, setEditingHeight] = useState<string>('')
+  const [isEditingWidth, setIsEditingWidth] = useState(false)
+  const [isEditingHeight, setIsEditingHeight] = useState(false)
   const [draggedElement, setDraggedElement] = useState<string | null>(null)
 
   const sanitizeInitials = (value: string) =>
@@ -49,7 +54,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     )
   const [dragOverElement, setDragOverElement] = useState<string | null>(null)
   const [dragPosition, setDragPosition] = useState<'above' | 'below' | null>(null)
-  
+
   const {
     elements,
     groups,
@@ -85,7 +90,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   } = useEditorStore()
 
   // Get selected element (if only one is selected)
-  const selectedElement = selectedElements.length === 1 
+  const selectedElement = selectedElements.length === 1
     ? elements.find(el => el.id === selectedElements[0])
     : null
 
@@ -107,7 +112,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const handleStrokeWidthChange = (value: number[]) => {
     const width = value[0]
     setStrokeWidth(width)
-    
+
     selectedElements.forEach(id => {
       onUpdateElement(id, { strokeWidth: width })
     })
@@ -116,7 +121,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const handleOpacityChange = (value: number[]) => {
     const newOpacity = value[0] / 100
     setOpacity(newOpacity)
-    
+
     selectedElements.forEach(id => {
       onUpdateElement(id, { opacity: newOpacity })
     })
@@ -125,7 +130,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const handleFontSizeChange = (value: number[]) => {
     const size = value[0]
     setFontSize(size)
-    
+
     selectedElements.forEach(id => {
       const element = elements.find(el => el.id === id)
       if (element?.type === 'text') {
@@ -240,18 +245,75 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const handlePositionChange = (property: 'x' | 'y', value: string) => {
     const numValue = parseFloat(value)
     if (isNaN(numValue)) return
-    
+
     selectedElements.forEach(id => {
       onUpdateElement(id, { [property]: numValue })
     })
   }
 
-  const handleSizeChange = (property: 'width' | 'height', value: string) => {
+  // Convert cm to meters for display
+  const cmToMeters = (cm: number) => (cm / 100).toFixed(2)
+
+  const handleDimensionFocus = (property: 'width' | 'height') => {
+    const element = elements.find(el => el.id === selectedElements[0])
+    if (element) {
+      const valueInMeters = cmToMeters(element[property] || 0)
+      if (property === 'width') {
+        setIsEditingWidth(true)
+        setEditingWidth(valueInMeters)
+        if (dimensionLocked) {
+          setIsEditingHeight(true)
+          setEditingHeight(valueInMeters)
+        }
+      } else {
+        setIsEditingHeight(true)
+        setEditingHeight(valueInMeters)
+        if (dimensionLocked) {
+          setIsEditingWidth(true)
+          setEditingWidth(valueInMeters)
+        }
+      }
+    }
+  }
+
+  const handleDimensionChange = (property: 'width' | 'height', value: string) => {
+    if (property === 'width') {
+      setEditingWidth(value)
+      if (dimensionLocked) setEditingHeight(value)
+    } else {
+      setEditingHeight(value)
+      if (dimensionLocked) setEditingWidth(value)
+    }
+  }
+
+  const handleDimensionBlur = (property: 'width' | 'height') => {
+    if (property === 'width') {
+      setIsEditingWidth(false)
+    } else {
+      setIsEditingHeight(false)
+    }
+
+    if (dimensionLocked) {
+      setIsEditingWidth(false)
+      setIsEditingHeight(false)
+    }
+
+    const value = property === 'width' ? editingWidth : editingHeight
+
+    if (value === '' || value === '-') return
+
     const numValue = parseFloat(value)
     if (isNaN(numValue) || numValue < 0) return
-    
+
+    // Convert from meters (UI) to centimeters (internal storage)
+    const cmValue = numValue * 100
+
     selectedElements.forEach(id => {
-      onUpdateElement(id, { [property]: numValue })
+      if (dimensionLocked) {
+        onUpdateElement(id, { width: cmValue, height: cmValue })
+      } else {
+        onUpdateElement(id, { [property]: cmValue })
+      }
     })
   }
 
@@ -264,15 +326,15 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const handleDragOver = (e: React.DragEvent, elementId: string) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
-    
+
     if (draggedElement === elementId) return
-    
+
     const rect = e.currentTarget.getBoundingClientRect()
     const y = e.clientY - rect.top
     const height = rect.height
-    
+
     const position = y < height / 2 ? 'above' : 'below'
-    
+
     setDragOverElement(elementId)
     setDragPosition(position)
   }
@@ -287,11 +349,11 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
 
   const handleDrop = (e: React.DragEvent, targetElementId: string) => {
     e.preventDefault()
-    
+
     if (draggedElement && draggedElement !== targetElementId && dragPosition) {
       reorderElements(draggedElement, targetElementId, dragPosition)
     }
-    
+
     setDraggedElement(null)
     setDragOverElement(null)
     setDragPosition(null)
@@ -303,14 +365,14 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     setDragPosition(null)
   }
 
-  const ColorPicker = ({ 
-    label, 
-    value, 
-    onChange 
-  }: { 
+  const ColorPicker = ({
+    label,
+    value,
+    onChange
+  }: {
     label: string
     value: string
-    onChange: (color: string) => void 
+    onChange: (color: string) => void
   }) => (
     <div className="space-y-2">
       <Label className="text-sm font-medium">{label}</Label>
@@ -387,9 +449,9 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
         {/* Área de conteúdo das abas (retrátil) */}
         <div className={`${isCollapsed ? 'hidden' : 'flex-1 flex flex-col min-h-0'} h-full bg-white p-3 overflow-hidden relative min-w-[260px] max-w-[360px]`}>
           {/* Botão para recolher o painel */}
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="h-8 w-8 p-0 absolute top-2 right-2"
             title="Recolher painel"
             onClick={() => setIsCollapsed(true)}
@@ -437,25 +499,48 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
 
                     {/* Size */}
                     {selectedElement && selectedElement.type !== 'line' && selectedElement.type !== 'arrow' && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <Label className="text-xs">Largura</Label>
-                          <Input
-                            type="number"
-                            value={selectedElement.width || 0}
-                            onChange={(e) => handleSizeChange('width', e.target.value)}
-                            className="h-8"
-                          />
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-medium">Dimensões</Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0"
+                            onClick={() => setDimensionLocked(!dimensionLocked)}
+                            title={dimensionLocked ? "Destravar proporções" : "Travar proporções"}
+                          >
+                            {dimensionLocked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                          </Button>
                         </div>
-                        <div>
-                          <Label className="text-xs">Altura</Label>
-                          <Input
-                            type="number"
-                            value={selectedElement.height || 0}
-                            onChange={(e) => handleSizeChange('height', e.target.value)}
-                            className="h-8"
-                          />
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Largura (m)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={isEditingWidth ? editingWidth : cmToMeters(selectedElement.width || 0)}
+                              onFocus={() => handleDimensionFocus('width')}
+                              onChange={(e) => handleDimensionChange('width', e.target.value)}
+                              onBlur={() => handleDimensionBlur('width')}
+                              className="h-8"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Altura (m)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={isEditingHeight ? editingHeight : cmToMeters(selectedElement.height || 0)}
+                              onFocus={() => handleDimensionFocus('height')}
+                              onChange={(e) => handleDimensionChange('height', e.target.value)}
+                              onBlur={() => handleDimensionBlur('height')}
+                              className="h-8"
+                            />
+                          </div>
                         </div>
+                        {dimensionLocked && (
+                          <p className="text-xs text-muted-foreground">🔗 Proporções travadas</p>
+                        )}
                       </div>
                     )}
 
@@ -614,7 +699,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                         <Separator />
                         <div className="space-y-3">
                           <Label className="text-xs font-medium">Alinhamento</Label>
-                          
+
                           {/* Horizontal Alignment */}
                           <div className="space-y-2">
                             <Label className="text-xs text-gray-600">Horizontal</Label>
@@ -731,7 +816,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                                   )
                                   groupsToUngroup.forEach(group => ungroupElements(group.id))
                                 }}
-                                disabled={!groups.some(group => 
+                                disabled={!groups.some(group =>
                                   group.elementIds.some(elementId => selectedElements.includes(elementId))
                                 )}
                                 className="h-8 w-8 p-0"
@@ -761,15 +846,15 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                   value={selectedElement?.strokeColor || strokeColor}
                   onChange={(color) => handleColorChange('stroke', color)}
                 />
-                
+
                 <Separator />
-                
+
                 <ColorPicker
                   label="Cor de Preenchimento"
                   value={selectedElement?.fillColor || fillColor}
                   onChange={(color) => handleColorChange('fill', color)}
                 />
-                
+
                 <div className="pt-2">
                   <Button
                     variant="outline"
@@ -800,7 +885,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                   const invalidCount = validation.invalid.length
                   const stageGroup = groups.find(g => g.name === 'Palco')
                   const isStageLocked = !!stageGroup?.locked
-                  
+
                   return (
                     <>
                       <Button
@@ -818,13 +903,13 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                           ⚠ Palco travado: destrave para adicionar novos elementos ao palco
                         </p>
                       )}
-                      
+
                       {hasValidElements && invalidCount === 0 && (
                         <p className="text-xs text-green-600">
                           ✓ {validation.valid.length} elemento(s) geométrico(s) selecionado(s)
                         </p>
                       )}
-                      
+
                       {hasValidElements && invalidCount > 0 && (
                         <div className="space-y-1">
                           <p className="text-xs text-green-600">
@@ -835,20 +920,20 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                           </p>
                         </div>
                       )}
-                      
+
                       {!hasValidElements && (
                         <p className="text-xs text-red-600">
                           ✗ Apenas retângulos, círculos ou formas compostas podem formar o palco
                         </p>
                       )}
-                      
+
                       <p className="text-xs text-gray-600">
                         Agrupa e trava elementos geométricos e compostos como base do palco
                       </p>
                     </>
                   )
                 })()}
-                
+
                 {selectedElements.length === 0 && (
                   <p className="text-xs text-gray-500 text-center py-2">
                     Selecione elementos para criar um palco
@@ -856,7 +941,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                 )}
               </CardContent>
             </Card>
-            
+
             {/* Groups Controls */}
             {groups.length > 0 && (
               <Card>
@@ -868,7 +953,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                     {groups.map((group) => {
                       const isLocked = group.locked
                       const groupName = group.name || `Grupo ${group.id.slice(0, 8)}`
-                      
+
                       return (
                         <div
                           key={group.id}
@@ -883,7 +968,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             <span className="text-xs font-medium">{groupName}</span>
                             <span className="text-xs text-gray-500">({group.elementIds.length} elementos)</span>
                           </div>
-                          
+
                           <Button
                             onClick={() => isLocked ? unlockGroup(group.id) : lockGroup(group.id)}
                             size="sm"
@@ -903,7 +988,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                 </CardContent>
               </Card>
             )}
-            
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Camadas</CardTitle>
@@ -929,18 +1014,18 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                         const isLocked = isElementLocked(element.id)
                         const elementGroup = getElementGroup(element.id)
                         const zIndex = element.zIndex || 0
-                        
+
                         const isDragging = draggedElement === element.id
                         const isDragOver = dragOverElement === element.id
                         const showDropIndicator = isDragOver && dragPosition
-                        
+
                         return (
                           <div key={element.id} className="relative">
                             {/* Drop indicator above */}
                             {showDropIndicator && dragPosition === 'above' && (
                               <div className="absolute -top-1 left-0 right-0 h-0.5 bg-blue-500 z-10 rounded" />
                             )}
-                            
+
                             <div
                               draggable={!isLocked}
                               onDragStart={(e) => !isLocked && handleDragStart(e, element.id)}
@@ -948,15 +1033,14 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                               onDragLeave={handleDragLeave}
                               onDrop={(e) => handleDrop(e, element.id)}
                               onDragEnd={handleDragEnd}
-                              className={`p-2 rounded border transition-all duration-200 ${
-                                isDragging 
-                                  ? 'opacity-50 scale-95 rotate-1 shadow-lg'
-                                  : isLocked 
-                                    ? 'bg-red-50 border-red-200 cursor-not-allowed opacity-75'
-                                    : isSelected 
-                                      ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 cursor-pointer' 
-                                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100 cursor-pointer'
-                              } ${isDragOver ? 'ring-2 ring-blue-400' : ''}`}
+                              className={`p-2 rounded border transition-all duration-200 ${isDragging
+                                ? 'opacity-50 scale-95 rotate-1 shadow-lg'
+                                : isLocked
+                                  ? 'bg-red-50 border-red-200 cursor-not-allowed opacity-75'
+                                  : isSelected
+                                    ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-300 cursor-pointer'
+                                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100 cursor-pointer'
+                                } ${isDragOver ? 'ring-2 ring-blue-400' : ''}`}
                               onClick={() => {
                                 if (!isLocked && !isDragging) {
                                   selectElements([element.id])
@@ -969,9 +1053,9 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                                   {!isLocked && (
                                     <GripVertical className="h-3 w-3 text-gray-400 cursor-grab active:cursor-grabbing" />
                                   )}
-                                  
+
                                   <div className="flex items-center gap-1">
-                                    <div 
+                                    <div
                                       className="w-3 h-3 rounded border flex-shrink-0"
                                       style={{ backgroundColor: element.fillColor !== 'transparent' ? element.fillColor : element.strokeColor }}
                                     />
@@ -980,11 +1064,10 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                                     )}
                                   </div>
                                   <div className="flex flex-col min-w-0">
-                                    <span className={`text-xs font-medium capitalize truncate ${
-                                      isLocked ? 'text-red-600' : ''
-                                    }`}>
-                                      {element.type === 'path' ? 'Desenho' : 
-                                       element.type === 'actor' ? 'Ator' : element.type}
+                                    <span className={`text-xs font-medium capitalize truncate ${isLocked ? 'text-red-600' : ''
+                                      }`}>
+                                      {element.type === 'path' ? 'Desenho' :
+                                        element.type === 'actor' ? 'Ator' : element.type}
                                       {element.type === 'text' && element.text ? ` - ${element.text.slice(0, 8)}...` : ''}
                                       {element.type === 'actor' && element.actorName ? ` - ${element.actorName.slice(0, 8)}...` : ''}
                                     </span>
@@ -1017,7 +1100,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                                 </div>
                               </div>
                             </div>
-                            
+
                             {/* Drop indicator below */}
                             {showDropIndicator && dragPosition === 'below' && (
                               <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-blue-500 z-10 rounded" />

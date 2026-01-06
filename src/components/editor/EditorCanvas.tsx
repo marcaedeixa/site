@@ -572,11 +572,15 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
 
       case 'circle':
-        const radius = Math.min(width, height) / 2
-        const centerX = x + radius
-        const centerY = y + radius
-        const distance = Math.sqrt((point.x - centerX) ** 2 + (point.y - centerY) ** 2)
-        return distance <= radius
+        // Use ellipse geometry for hit detection (supports different width/height)
+        const radiusX = width / 2
+        const radiusY = height / 2
+        const ellipseCenterX = x + radiusX
+        const ellipseCenterY = y + radiusY
+        // Ellipse equation: (x-cx)²/rx² + (y-cy)²/ry² <= 1
+        const normalizedX = (point.x - ellipseCenterX) / radiusX
+        const normalizedY = (point.y - ellipseCenterY) / radiusY
+        return (normalizedX * normalizedX + normalizedY * normalizedY) <= 1
 
       case 'line':
       case 'arrow':
@@ -776,16 +780,24 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         )
       }
     } else if (type === 'circle') {
-      const radius = Math.min(width, height) / 2
-      const centerX = x + radius
-      const centerY = y + radius
+      // Use ellipse geometry for handles (independent width/height)
+      const centerX = x + width / 2
+      const centerY = y + height / 2
 
-      // Radius handles
+      // Corner handles for ellipse (like rectangle)
       handles.push(
-        { id: 'radius-n', x: centerX - handleSize / 2, y: y - handleSize / 2, cursor: 'n-resize' },
-        { id: 'radius-s', x: centerX - handleSize / 2, y: y + height - handleSize / 2, cursor: 's-resize' },
-        { id: 'radius-w', x: x - handleSize / 2, y: centerY - handleSize / 2, cursor: 'w-resize' },
-        { id: 'radius-e', x: x + width - handleSize / 2, y: centerY - handleSize / 2, cursor: 'e-resize' }
+        { id: 'nw', x: x - handleSize / 2, y: y - handleSize / 2, cursor: 'nw-resize' },
+        { id: 'ne', x: x + width - handleSize / 2, y: y - handleSize / 2, cursor: 'ne-resize' },
+        { id: 'sw', x: x - handleSize / 2, y: y + height - handleSize / 2, cursor: 'sw-resize' },
+        { id: 'se', x: x + width - handleSize / 2, y: y + height - handleSize / 2, cursor: 'se-resize' }
+      )
+
+      // Edge handles
+      handles.push(
+        { id: 'n', x: centerX - handleSize / 2, y: y - handleSize / 2, cursor: 'n-resize' },
+        { id: 's', x: centerX - handleSize / 2, y: y + height - handleSize / 2, cursor: 's-resize' },
+        { id: 'w', x: x - handleSize / 2, y: centerY - handleSize / 2, cursor: 'w-resize' },
+        { id: 'e', x: x + width - handleSize / 2, y: centerY - handleSize / 2, cursor: 'e-resize' }
       )
     } else if (type === 'line' || type === 'arrow') {
       const startX = x
@@ -1959,11 +1971,13 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         break
       case 'circle':
       case 'actor': {
-        const radius = Math.min(width, height) / 2
-        const centerX = x + radius
-        const centerY = y + radius
+        // Use ellipse for hover to match rendering
+        const hoverRadiusX = width / 2
+        const hoverRadiusY = height / 2
+        const hoverCenterX = x + hoverRadiusX
+        const hoverCenterY = y + hoverRadiusY
         ctx.beginPath()
-        ctx.arc(centerX, centerY, radius + 2, 0, 2 * Math.PI)
+        ctx.ellipse(hoverCenterX, hoverCenterY, hoverRadiusX + 2, hoverRadiusY + 2, 0, 0, 2 * Math.PI)
         ctx.stroke()
         break
       }
@@ -2180,12 +2194,14 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         break
 
       case 'circle':
-        const radius = Math.min(width, height) / 2
-        const centerX = x + width / 2
-        const centerY = y + height / 2
+        // Use ellipse to support different width/height (allows circle to become oval)
+        const circleRadiusX = width / 2
+        const circleRadiusY = height / 2
+        const circleCenterX = x + circleRadiusX
+        const circleCenterY = y + circleRadiusY
 
         ctx.beginPath()
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
+        ctx.ellipse(circleCenterX, circleCenterY, circleRadiusX, circleRadiusY, 0, 0, 2 * Math.PI)
         ctx.fill()
         if (borderWidth > 0) {
           ctx.stroke()
@@ -2308,9 +2324,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         break
 
       case 'circle':
-        const radius = Math.min(width, height) / 2
+        // Use ellipse for different width/height support
+        const previewRadiusX = width / 2
+        const previewRadiusY = height / 2
         ctx.beginPath()
-        ctx.arc(x + radius, y + radius, radius, 0, 2 * Math.PI)
+        ctx.ellipse(x + previewRadiusX, y + previewRadiusY, previewRadiusX, previewRadiusY, 0, 0, 2 * Math.PI)
         if (element.fillColor !== 'transparent') {
           ctx.fill()
         }
@@ -2837,9 +2855,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
           break
         case 'circle':
-          const r = Math.min(width, height) / 2
+          // Use ellipse for group indicator
+          const groupRadiusX = width / 2
+          const groupRadiusY = height / 2
           ctx.beginPath()
-          ctx.arc(x + r, y + r, r + padding, 0, 2 * Math.PI)
+          ctx.ellipse(x + groupRadiusX, y + groupRadiusY, groupRadiusX + padding, groupRadiusY + padding, 0, 0, 2 * Math.PI)
           ctx.stroke()
           break
         case 'actor':
@@ -2966,9 +2986,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           }
           break
         case 'circle':
-          const r = Math.min(width, height) / 2
+          // Use ellipse for selection outline
+          const selRadiusX = width / 2
+          const selRadiusY = height / 2
           ctx.beginPath()
-          ctx.arc(x + r, y + r, r + 2, 0, 2 * Math.PI)
+          ctx.ellipse(x + selRadiusX, y + selRadiusY, selRadiusX + 2, selRadiusY + 2, 0, 0, 2 * Math.PI)
           ctx.stroke()
           break
         case 'actor':

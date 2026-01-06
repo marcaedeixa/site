@@ -16,10 +16,10 @@ interface StageConfigProps {
 }
 
 export function StageConfig({ className }: StageConfigProps) {
-  const { 
-    stageConfig, 
-    setStageConfig, 
-    updateStageConfig, 
+  const {
+    stageConfig,
+    setStageConfig,
+    updateStageConfig,
     removeStageConfig,
     centerStage,
     selectedElements,
@@ -188,7 +188,7 @@ export function StageConfig({ className }: StageConfigProps) {
                 <Label className="text-xs font-medium">Dimensões</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label htmlFor="stage-width" className="text-xs">Largura</Label>
+                    <Label htmlFor="stage-width" className="text-xs">Largura (m)</Label>
                     <Input
                       id="stage-width"
                       type="number"
@@ -200,7 +200,7 @@ export function StageConfig({ className }: StageConfigProps) {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="stage-height" className="text-xs">Altura</Label>
+                    <Label htmlFor="stage-height" className="text-xs">Altura (m)</Label>
                     <Input
                       id="stage-height"
                       type="number"
@@ -219,7 +219,7 @@ export function StageConfig({ className }: StageConfigProps) {
                 <Label className="text-xs font-medium">Forma</Label>
                 <Select
                   value={stageConfig.shape}
-                  onValueChange={(value: 'rectangle' | 'circle' | 'oval') => 
+                  onValueChange={(value: 'rectangle' | 'circle' | 'oval') =>
                     handleUpdateStage({ shape: value })
                   }
                 >
@@ -252,7 +252,7 @@ export function StageConfig({ className }: StageConfigProps) {
               {/* Cores */}
               <div className="space-y-3">
                 <Label className="text-xs font-medium">Cores</Label>
-                
+
                 {/* Cor de fundo */}
                 <div className="space-y-2">
                   <Label htmlFor="stage-bg-color" className="text-xs">Cor de Fundo</Label>
@@ -275,7 +275,7 @@ export function StageConfig({ className }: StageConfigProps) {
                         {colorPresets.map((preset) => (
                           <SelectItem key={preset.value} value={preset.value}>
                             <div className="flex items-center gap-2">
-                              <div 
+                              <div
                                 className="w-4 h-4 rounded border"
                                 style={{ backgroundColor: preset.value }}
                               />
