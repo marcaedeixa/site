@@ -327,15 +327,15 @@ export default function Home() {
               </p>
               <div className="grid grid-cols-3 gap-8">
                 <div>
-                  <p className="text-4xl font-black text-white">1k+</p>
+                  <p className="text-4xl font-black text-white">XX+</p>
                   <p className="text-sm text-gray-500 mt-1">Usuários ativos</p>
                 </div>
                 <div>
-                  <p className="text-4xl font-black text-white">50k+</p>
+                  <p className="text-4xl font-black text-white">XXk+</p>
                   <p className="text-sm text-gray-500 mt-1">Projetos criados</p>
                 </div>
                 <div>
-                  <p className="text-4xl font-black text-white">99%</p>
+                  <p className="text-4xl font-black text-white">XX%</p>
                   <p className="text-sm text-gray-500 mt-1">Satisfação</p>
                 </div>
               </div>

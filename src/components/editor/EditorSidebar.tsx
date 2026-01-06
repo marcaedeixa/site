@@ -923,7 +923,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
 
                       {!hasValidElements && (
                         <p className="text-xs text-red-600">
-                          ✗ Apenas retângulos, círculos ou formas compostas podem formar o palco
+                          ✗ Apenas retângulos, círculos, retas ou formas compostas podem formar o palco
                         </p>
                       )}
 

@@ -1198,10 +1198,22 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         const unlocked = elementsToMove.filter(id => !isElementLocked(id))
 
         setDraggedElements(unlocked)
-        setDragOffset({
-          x: canvasPoint.x - clickedElement.x,
-          y: canvasPoint.y - clickedElement.y
-        })
+
+        // Calculate offset from the first unlocked element (reference element used in drag delta calculation)
+        // This ensures consistency between where we click and how we calculate movement
+        const referenceElement = elements.find(el => el.id === unlocked[0])
+        if (referenceElement) {
+          setDragOffset({
+            x: canvasPoint.x - referenceElement.x,
+            y: canvasPoint.y - referenceElement.y
+          })
+        } else {
+          // Fallback to clicked element if reference not found
+          setDragOffset({
+            x: canvasPoint.x - clickedElement.x,
+            y: canvasPoint.y - clickedElement.y
+          })
+        }
       } else {
         // Start selection rectangle or panning
         if (e.ctrlKey || e.metaKey) {

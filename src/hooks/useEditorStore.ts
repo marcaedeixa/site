@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 
-export type Tool = 
+export type Tool =
   | 'select'
   | 'rectangle'
   | 'circle'
@@ -141,12 +141,12 @@ interface EditorStore {
   viewport: Viewport
   history: HistoryState[]
   historyIndex: number
-  
+
   // Stage configuration
   stageConfig: StageConfig | null
   hoverPreviewEnabled: boolean
   hoverPreviewColor: string
-  
+
   // Scene state
   scenes: Scene[]
   currentSceneIndex: number
@@ -155,47 +155,47 @@ interface EditorStore {
   isFullscreenSlideshow: boolean
   slideshowInterval: number
   slideshowTimer?: NodeJS.Timeout
-  
+
   // Drawing state
   isDrawing: boolean
   currentElement: Element | null
-  
+
   // Properties
   strokeColor: string
   fillColor: string
   strokeWidth: number
   opacity: number
   fontSize: number
-  
+
   // Actions
   setSelectedTool: (tool: Tool) => void
   setElements: (elements: Element[]) => void
   setViewport: (viewport: Viewport) => void
-  
+
   // Element operations
   addElement: (element: Omit<Element, 'id'>) => void
   updateElement: (id: string, updates: Partial<Element>, options?: { commitHistory?: boolean }) => void
   deleteElements: (ids: string[]) => void
   duplicateElements: (ids: string[]) => void
-  
+
   // Selection
   selectElements: (ids: string[]) => void
   clearSelection: () => void
   toggleElementSelection: (id: string) => void
-  
+
   // History
   saveToHistory: () => void
   undo: () => void
   redo: () => void
   canUndo: boolean
   canRedo: boolean
-  
+
   // Drawing
   startDrawing: (element: Omit<Element, 'id'>) => void
   updateCurrentElement: (updates: Partial<Element>) => void
   finishDrawing: () => void
   cancelDrawing: () => void
-  
+
   // Properties
   setStrokeColor: (color: string) => void
   setFillColor: (color: string) => void
@@ -211,21 +211,21 @@ interface EditorStore {
   weldElements: (elementIds: string[]) => void
   getElementGroup: (elementId: string) => Group | undefined
   isElementInGroup: (elementId: string) => boolean
-  
+
   // Stage/Lock operations
   lockGroup: (groupId: string) => void
   unlockGroup: (groupId: string) => void
   createStage: (elementIds: string[]) => void
   isElementLocked: (elementId: string) => boolean
   validateGeometricElements: (elementIds: string[]) => { valid: string[], invalid: string[], hasValidElements: boolean }
-  
+
   // Layer operations
   bringToFront: (elementIds: string[]) => void
   sendToBack: (elementIds: string[]) => void
   bringForward: (elementIds: string[]) => void
   sendBackward: (elementIds: string[]) => void
   reorderElements: (draggedElementId: string, targetElementId: string, position: 'above' | 'below') => void
-  
+
   // Scene operations
   addScene: (name?: string) => void
   duplicateScene: (index: number) => void
@@ -234,7 +234,7 @@ interface EditorStore {
   updateSceneName: (index: number, name: string) => void
   updateCurrentScene: () => void
   reorderScenes: (fromIndex: number, toIndex: number) => void
-  
+
   // Slideshow operations
   startSlideshow: () => void
   stopSlideshow: () => void
@@ -244,26 +244,26 @@ interface EditorStore {
   setSlideshowInterval: (interval: number) => void
   startFullscreenSlideshow: () => void
   stopFullscreenSlideshow: () => void
-  
+
   // Stage operations
   setStageConfig: (config: StageConfig) => void
   updateStageConfig: (updates: Partial<StageConfig>) => void
   removeStageConfig: () => void
   centerStage: () => void
   syncStageAcrossScenes: () => void
-  
+
   // Deixa operations
   updateDeixaAtual: (sceneIndex: number, deixa: string, autoFilled?: boolean) => void
   updateDeixaSeguinte: (sceneIndex: number, deixa: string, autoFilled?: boolean) => void
   syncDeixas: (sceneIndex: number, field: 'atual' | 'seguinte', value: string) => void
-  
+
   // Scene notes operations
   updateSceneNotes: (sceneIndex: number, notes: string) => void
-  
+
   // Actor operations
   removeActorFromAllScenes: (actorId: string) => void
   removeObjectFromAllScenes: (objectId: string) => void
-  
+
   // Alignment operations
   alignElementsLeft: (elementIds: string[]) => void
   alignElementsCenter: (elementIds: string[]) => void
@@ -273,10 +273,10 @@ interface EditorStore {
   alignElementsBottom: (elementIds: string[]) => void
   distributeElementsHorizontally: (elementIds: string[]) => void
   distributeElementsVertically: (elementIds: string[]) => void
-  
+
   // Store reset
   resetStore: () => void
-  
+
   // Initialize with sample data
   initializeWithSampleData: () => void
 
@@ -295,12 +295,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   historyIndex: -1,
   canUndo: false,
   canRedo: false,
-  
+
   // Stage configuration
   stageConfig: null,
   hoverPreviewEnabled: false,
   hoverPreviewColor: '#1d4ed8',
-  
+
   // Scene state
   scenes: [],
   currentSceneIndex: -1,
@@ -309,28 +309,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   isFullscreenSlideshow: false,
   slideshowInterval: 3000, // 3 seconds default
   slideshowTimer: undefined,
-  
+
   isDrawing: false,
   currentElement: null,
-  
+
   strokeColor: '#000000',
   fillColor: 'transparent',
   strokeWidth: 2,
   opacity: 1,
   fontSize: 16,
-  
+
   // Actions
   setSelectedTool: (tool) => set({ selectedTool: tool }),
   setElements: (elements) => set({ elements }),
   setViewport: (viewport) => set({ viewport }),
-  
+
   // Element operations
   addElement: (elementData) => {
     const { elements, groups } = get()
-    
+
     // Verificar duplicação de atores na cena atual
     if (elementData.type === 'actor' && elementData.actorId) {
-      const existingActor = elements.find(el => 
+      const existingActor = elements.find(el =>
         el.type === 'actor' && el.actorId === elementData.actorId
       )
       if (existingActor) {
@@ -338,10 +338,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return // Não adicionar o ator duplicado
       }
     }
-    
+
     // Verificar duplicação de objetos na cena atual
     if (elementData.type === 'object' && elementData.objectId) {
-      const existingObject = elements.find(el => 
+      const existingObject = elements.find(el =>
         el.type === 'object' && el.objectId === elementData.objectId
       )
       if (existingObject) {
@@ -349,7 +349,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return // Não adicionar o objeto duplicado
       }
     }
-    
+
     // Encontrar o maior z-index de elementos não travados
     const unlockedElements = elements.filter(el => {
       if (el.locked) return false
@@ -359,28 +359,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
       return true
     })
-    
-    const maxUnlockedZIndex = unlockedElements.length > 0 
-      ? Math.max(...unlockedElements.map(el => el.zIndex || 0)) 
+
+    const maxUnlockedZIndex = unlockedElements.length > 0
+      ? Math.max(...unlockedElements.map(el => el.zIndex || 0))
       : Math.max(...elements.map(el => el.zIndex || 0), 0)
-    
+
     const element: Element = {
       ...elementData,
       id: nanoid(),
       zIndex: elementData.zIndex !== undefined ? elementData.zIndex : maxUnlockedZIndex + 1,
     }
-    
+
     set((state) => {
       const newElements = [...state.elements, element]
       return {
         elements: newElements,
       }
     })
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   updateElement: (id, updates, options: { commitHistory?: boolean } = {}) => {
     const { commitHistory = true } = options
     let stageAffected = false
@@ -420,7 +420,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
       return { elements: updatedElements }
     })
-    
+
     if (commitHistory) {
       get().saveToHistory()
     }
@@ -430,7 +430,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       get().syncStageAcrossScenes()
     }
   },
-  
+
   deleteElements: (ids) => {
     const { elements, groups } = get()
     const stageGroup = groups.find(group => group.name === 'Palco')
@@ -483,17 +483,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         groups: updatedGroups
       }
     })
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
     get().syncStageAcrossScenes()
   },
-  
+
   duplicateElements: (ids) => {
     const { elements } = get()
     const elementsToDuplicate = elements.filter((el) => ids.includes(el.id))
     const maxZIndex = elements.length > 0 ? Math.max(...elements.map(el => el.zIndex || 0)) : 0
-    
+
     const duplicatedElements = elementsToDuplicate.map((el, index) => ({
       ...el,
       id: nanoid(),
@@ -501,19 +501,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       y: el.y + 20,
       zIndex: maxZIndex + index + 1,
     }))
-    
+
     set((state) => ({
       elements: [...state.elements, ...duplicatedElements],
       selectedElements: duplicatedElements.map((el) => el.id),
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   // Selection
   selectElements: (ids) => set({ selectedElements: ids }),
   clearSelection: () => set({ selectedElements: [] }),
-  
+
   toggleElementSelection: (id) => {
     set((state) => {
       const isSelected = state.selectedElements.includes(id)
@@ -524,11 +524,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }
     })
   },
-  
+
   // History
   saveToHistory: () => {
     const { elements, groups, selectedElements, history, historyIndex } = get()
-    
+
     const newHistoryState: HistoryState = {
       elements: JSON.parse(JSON.stringify(elements)),
       groups: JSON.parse(JSON.stringify(groups)),
@@ -545,15 +545,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       })
       return
     }
-    
+
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push(newHistoryState)
-    
+
     // Limit history to 50 states
     if (newHistory.length > 50) {
       newHistory.shift()
     }
-    
+
     set({
       history: newHistory,
       historyIndex: newHistory.length - 1,
@@ -561,10 +561,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       canRedo: false,
     })
   },
-  
+
   undo: () => {
     const { history, historyIndex } = get()
-    
+
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1
       const previousState = history[newIndex]
@@ -578,10 +578,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       })
     }
   },
-  
+
   redo: () => {
     const { history, historyIndex } = get()
-    
+
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1
       const nextState = history[newIndex]
@@ -595,24 +595,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       })
     }
   },
-  
+
   // Drawing
   startDrawing: (elementData) => {
     const { elements } = get()
     const maxZIndex = elements.length > 0 ? Math.max(...elements.map(el => el.zIndex || 0)) : 0
-    
+
     const element: Element = {
       ...elementData,
       id: nanoid(),
       zIndex: elementData.zIndex !== undefined ? elementData.zIndex : maxZIndex + 1,
     }
-    
+
     set({
       isDrawing: true,
       currentElement: element,
     })
   },
-  
+
   updateCurrentElement: (updates) => {
     set((state) => ({
       currentElement: state.currentElement
@@ -620,27 +620,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         : null,
     }))
   },
-  
+
   finishDrawing: () => {
     const { currentElement } = get()
-    
+
     if (currentElement) {
       get().addElement(currentElement)
     }
-    
+
     set({
       isDrawing: false,
       currentElement: null,
     })
   },
-  
+
   cancelDrawing: () => {
     set({
       isDrawing: false,
       currentElement: null,
     })
   },
-  
+
   // Properties
   setStrokeColor: (color) => set({ strokeColor: color }),
   setFillColor: (color) => set({ fillColor: color }),
@@ -649,18 +649,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setFontSize: (size) => set({ fontSize: size }),
   setHoverPreviewEnabled: (enabled) => set({ hoverPreviewEnabled: enabled }),
   setHoverPreviewColor: (color) => set({ hoverPreviewColor: color }),
-  
+
   // Group operations
   groupElements: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const groupId = nanoid()
     const newGroup: Group = {
       id: groupId,
       elementIds,
       type: 'group'
     }
-    
+
     set((state) => ({
       groups: [...state.groups, newGroup],
       elements: state.elements.map((el) =>
@@ -668,16 +668,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ),
       selectedElements: []
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   ungroupElements: (groupId) => {
     const { groups } = get()
     const group = groups.find(g => g.id === groupId)
-    
+
     if (!group) return
-    
+
     set((state) => ({
       groups: state.groups.filter(g => g.id !== groupId),
       elements: state.elements.map((el) =>
@@ -685,13 +685,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ),
       selectedElements: group.elementIds
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   weldElements: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const groupId = nanoid()
     const newGroup: Group = {
       id: groupId,
@@ -699,7 +699,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       type: 'welded',
       locked: true
     }
-    
+
     set((state) => ({
       groups: [...state.groups, newGroup],
       elements: state.elements.map((el) =>
@@ -707,81 +707,81 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ),
       selectedElements: []
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   getElementGroup: (elementId) => {
     const { groups, elements } = get()
     const element = elements.find(el => el.id === elementId)
-    
+
     if (!element?.groupId) return undefined
-    
+
     return groups.find(g => g.id === element.groupId)
   },
-  
+
   isElementInGroup: (elementId) => {
     const { elements } = get()
     const element = elements.find(el => el.id === elementId)
     return !!element?.groupId
   },
-  
+
   // Stage/Lock operations
   lockGroup: (groupId) => {
     const { groups } = get()
     const group = groups.find(g => g.id === groupId)
-    
+
     if (!group) return
-    
+
     set((state) => ({
-      groups: state.groups.map(g => 
+      groups: state.groups.map(g =>
         g.id === groupId ? { ...g, locked: true } : g
       ),
-      elements: state.elements.map(el => 
+      elements: state.elements.map(el =>
         group.elementIds.includes(el.id) ? { ...el, locked: true } : el
       ),
       selectedElements: []
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   unlockGroup: (groupId) => {
     const { groups } = get()
     const group = groups.find(g => g.id === groupId)
-    
+
     if (!group) return
-    
+
     set((state) => ({
-      groups: state.groups.map(g => 
+      groups: state.groups.map(g =>
         g.id === groupId ? { ...g, locked: false } : g
       ),
-      elements: state.elements.map(el => 
+      elements: state.elements.map(el =>
         group.elementIds.includes(el.id) ? { ...el, locked: false } : el
       )
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   createStage: (elementIds) => {
     if (elementIds.length < 1) return
 
     const { elements, groups } = get()
-    
+
     // Filtrar elementos válidos para palco: retângulos, círculos e formas compostas (paths)
     const geometricElements = elementIds
       .map(id => elements.find(el => el.id === id))
-      .filter(el => el && (el.type === 'rectangle' || el.type === 'circle' || el.type === 'path'))
-    
+      .filter(el => el && (el.type === 'rectangle' || el.type === 'circle' || el.type === 'path' || el.type === 'line'))
+
     if (geometricElements.length === 0) {
       console.warn('Nenhum elemento válido (retângulo, círculo ou forma composta) foi selecionado para criar o palco')
       return
     }
-    
+
     // Usar apenas os IDs dos elementos geométricos válidos
     const validElementIds = geometricElements.map(el => el.id)
-    
+
     const minZIndex = Math.min(...elements.map(el => el.zIndex || 0))
     const stageZIndex = Math.max(0, minZIndex - 100) // Garantir que o palco fique bem no fundo
 
@@ -873,20 +873,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().syncStageAcrossScenes()
     get().saveToHistory()
   },
-  
+
   isElementLocked: (elementId) => {
     const { elements, groups } = get()
     const element = elements.find(el => el.id === elementId)
-    
+
     if (!element) return false
     if (element.locked) return true
-    
+
     // Verificar se o grupo está travado
     if (element.groupId) {
       const group = groups.find(g => g.id === element.groupId)
       return group?.locked || false
     }
-    
+
     return false
   },
 
@@ -894,132 +894,132 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { elements } = get()
     const valid: string[] = []
     const invalid: string[] = []
-    
+
     elementIds.forEach(id => {
       const element = elements.find(el => el.id === id)
       if (element) {
-        if (element.type === 'rectangle' || element.type === 'circle' || element.type === 'path') {
+        if (element.type === 'rectangle' || element.type === 'circle' || element.type === 'path' || element.type === 'line') {
           valid.push(id)
         } else {
           invalid.push(id)
         }
       }
     })
-    
+
     return {
       valid,
       invalid,
       hasValidElements: valid.length > 0
     }
   },
-  
+
   // Layer operations
   bringToFront: (elementIds) => {
     if (elementIds.length === 0) return
-    
+
     const { elements } = get()
     const maxZIndex = Math.max(...elements.map(el => el.zIndex || 0))
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
-        elementIds.includes(el.id) 
+        elementIds.includes(el.id)
           ? { ...el, zIndex: maxZIndex + elementIds.indexOf(el.id) + 1 }
           : el
       ),
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   sendToBack: (elementIds) => {
     if (elementIds.length === 0) return
-    
+
     const { elements } = get()
     const minZIndex = Math.min(...elements.map(el => el.zIndex || 0))
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
-        elementIds.includes(el.id) 
+        elementIds.includes(el.id)
           ? { ...el, zIndex: minZIndex - elementIds.length + elementIds.indexOf(el.id) }
           : el
       ),
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   bringForward: (elementIds) => {
     if (elementIds.length === 0) return
-    
+
     const { elements } = get()
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
-        elementIds.includes(el.id) 
+        elementIds.includes(el.id)
           ? { ...el, zIndex: (el.zIndex || 0) + 1 }
           : el
       ),
     }))
-    
+
     get().saveToHistory()
   },
-  
+
   sendBackward: (elementIds) => {
     if (elementIds.length === 0) return
-    
+
     const { elements } = get()
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
-        elementIds.includes(el.id) 
+        elementIds.includes(el.id)
           ? { ...el, zIndex: (el.zIndex || 0) - 1 }
           : el
       ),
     }))
-    
+
     get().saveToHistory()
   },
 
   reorderElements: (draggedElementId, targetElementId, position) => {
     const { elements } = get()
-    
+
     const draggedElement = elements.find(el => el.id === draggedElementId)
     const targetElement = elements.find(el => el.id === targetElementId)
-    
+
     if (!draggedElement || !targetElement) return
-    
+
     const targetZIndex = targetElement.zIndex || 0
     let newZIndex: number
-    
+
     if (position === 'above') {
       newZIndex = targetZIndex + 1
     } else {
       newZIndex = targetZIndex - 1
     }
-    
+
     // Ajustar outros elementos se necessário
     const updatedElements = elements.map(el => {
       if (el.id === draggedElementId) {
         return { ...el, zIndex: newZIndex }
       }
-      
+
       // Se estamos movendo para cima e o elemento está entre o target e o novo zIndex
       if (position === 'above' && el.zIndex > targetZIndex && el.zIndex <= newZIndex && el.id !== draggedElementId) {
         return { ...el, zIndex: el.zIndex - 1 }
       }
-      
+
       // Se estamos movendo para baixo e o elemento está entre o novo zIndex e o target
       if (position === 'below' && el.zIndex >= newZIndex && el.zIndex < targetZIndex && el.id !== draggedElementId) {
         return { ...el, zIndex: el.zIndex + 1 }
       }
-      
+
       return el
     })
-    
+
     set({ elements: updatedElements })
     get().saveToHistory()
   },
-  
+
   // Scene operations
   addScene: (name) => {
     const { elements, groups, viewport, stageConfig, scenes } = get()
@@ -1029,7 +1029,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       alert('Crie ou configure um palco antes de adicionar cenas. Assim garantimos que todas as cenas compartilhem a mesma base.')
       return
     }
-    
+
     const newScene: Scene = {
       id: nanoid(),
       name: name || `Cena ${scenes.length + 1}`,
@@ -1039,17 +1039,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       stageConfig: stageConfig ? JSON.parse(JSON.stringify(stageConfig)) : null,
       timestamp: new Date().toISOString()
     }
-    
+
     set((state) => ({
       scenes: [...state.scenes, newScene],
       currentSceneIndex: state.scenes.length
     }))
   },
-  
+
   duplicateScene: (index) => {
     const { scenes } = get()
     if (index < 0 || index >= scenes.length) return
-    
+
     const sceneToClone = scenes[index]
     const newScene: Scene = {
       ...JSON.parse(JSON.stringify(sceneToClone)),
@@ -1057,7 +1057,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       name: `${sceneToClone.name} (Cópia)`,
       timestamp: new Date().toISOString()
     }
-    
+
     set((state) => ({
       scenes: [
         ...state.scenes.slice(0, index + 1),
@@ -1066,32 +1066,32 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ]
     }))
   },
-  
+
   deleteScene: (index) => {
     const { scenes, currentSceneIndex } = get()
     if (index < 0 || index >= scenes.length) return
-    
+
     const newScenes = scenes.filter((_, i) => i !== index)
     let newCurrentIndex = currentSceneIndex
-    
+
     if (currentSceneIndex === index) {
       newCurrentIndex = Math.max(0, Math.min(newScenes.length - 1, currentSceneIndex))
     } else if (currentSceneIndex > index) {
       newCurrentIndex = currentSceneIndex - 1
     }
-    
+
     set({
       scenes: newScenes,
       currentSceneIndex: newScenes.length === 0 ? -1 : newCurrentIndex
     })
   },
-  
+
   loadScene: (index) => {
     const { scenes } = get()
     if (index < 0 || index >= scenes.length) return
-    
+
     const scene = scenes[index]
-    
+
     set({
       elements: JSON.parse(JSON.stringify(scene.elements)),
       groups: JSON.parse(JSON.stringify(scene.groups)),
@@ -1104,24 +1104,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().initializeHistory()
     get().syncStageAcrossScenes()
   },
-  
+
   updateSceneName: (index, name) => {
     const { scenes } = get()
     if (index < 0 || index >= scenes.length) return
-    
+
     set((state) => ({
-      scenes: state.scenes.map((scene, i) => 
+      scenes: state.scenes.map((scene, i) =>
         i === index ? { ...scene, name } : scene
       )
     }))
   },
-  
+
   updateCurrentScene: () => {
     const { scenes, currentSceneIndex, elements, groups, viewport, stageConfig } = get()
     if (currentSceneIndex < 0 || currentSceneIndex >= scenes.length) return
-    
+
     set((state) => ({
-      scenes: state.scenes.map((scene, i) => 
+      scenes: state.scenes.map((scene, i) =>
         i === currentSceneIndex ? {
           ...scene,
           elements: JSON.parse(JSON.stringify(elements)),
@@ -1133,90 +1133,90 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       )
     }))
   },
-  
+
   reorderScenes: (fromIndex, toIndex) => {
     const { scenes } = get()
     if (fromIndex < 0 || fromIndex >= scenes.length || toIndex < 0 || toIndex >= scenes.length) return
-    
+
     const newScenes = [...scenes]
     const [movedScene] = newScenes.splice(fromIndex, 1)
     newScenes.splice(toIndex, 0, movedScene)
-    
+
     set({ scenes: newScenes })
   },
-  
+
   // Slideshow operations
   startSlideshow: () => {
     const { scenes, slideshowInterval, slideshowTimer } = get()
     if (scenes.length === 0) return
-    
+
     // Limpar timer existente se houver
     if (slideshowTimer) {
       clearInterval(slideshowTimer)
     }
-    
+
     // Começar da primeira cena se não houver cena atual
     const { currentSceneIndex } = get()
     if (currentSceneIndex === -1) {
       get().loadScene(0)
     }
-    
+
     const timer = setInterval(() => {
       // Load next scene directly without transition
       get().nextScene()
     }, slideshowInterval)
-    
+
     set({
       isPlayingSlideshow: true,
       slideshowTimer: timer
     })
   },
-  
+
   stopSlideshow: () => {
     const { slideshowTimer } = get()
     if (slideshowTimer) {
       clearInterval(slideshowTimer)
     }
-    
+
     set({
       isPlayingSlideshow: false,
       slideshowTimer: undefined
     })
   },
-  
+
   pauseSlideshow: () => {
     const { slideshowTimer } = get()
     if (slideshowTimer) {
       clearInterval(slideshowTimer)
     }
-    
+
     set({
       isPlayingSlideshow: false,
       slideshowTimer: undefined
     })
   },
-  
+
   nextScene: () => {
     const { scenes, currentSceneIndex } = get()
     if (scenes.length === 0) return
-    
+
     const nextIndex = (currentSceneIndex + 1) % scenes.length
     get().loadScene(nextIndex)
   },
-  
+
   previousScene: () => {
     const { scenes, currentSceneIndex } = get()
     if (scenes.length === 0) return
-    
+
     const prevIndex = currentSceneIndex <= 0 ? scenes.length - 1 : currentSceneIndex - 1
     get().loadScene(prevIndex)
   },
-  
+
   setSlideshowInterval: (interval) => {
     const { isPlayingSlideshow } = get()
-    
+
     set({ slideshowInterval: interval })
-    
+
     // Se o slideshow estiver rodando, reiniciar com novo intervalo
     if (isPlayingSlideshow) {
       get().stopSlideshow()
@@ -1227,13 +1227,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   startFullscreenSlideshow: () => {
     const { scenes } = get()
     if (scenes.length === 0) return
-    
+
     // Para o slideshow normal se estiver rodando
     get().stopSlideshow()
-    
+
     // Ativa o modo tela inteira
     set({ isFullscreenSlideshow: true })
-    
+
     // Inicia o slideshow automático
     get().startSlideshow()
   },
@@ -1241,15 +1241,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   stopFullscreenSlideshow: () => {
     // Para o slideshow
     get().stopSlideshow()
-    
+
     // Desativa o modo tela inteira
     set({ isFullscreenSlideshow: false })
   },
-  
+
   // Stage operations
   setStageConfig: (config) => {
     set({ stageConfig: config })
-    
+
     // Sincronizar stageConfig em todas as cenas
     const { scenes } = get()
     if (scenes.length > 0) {
@@ -1260,18 +1260,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         }))
       }))
     }
-    
+
     // Centralizar o palco após configurá-lo
     get().centerStage()
   },
-  
+
   updateStageConfig: (updates) => {
     const { stageConfig, scenes } = get()
     if (!stageConfig) return
-    
+
     const updatedConfig = { ...stageConfig, ...updates }
     set({ stageConfig: updatedConfig })
-    
+
     // Sincronizar stageConfig atualizado em todas as cenas
     if (scenes.length > 0) {
       set((state) => ({
@@ -1282,10 +1282,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }))
     }
   },
-  
+
   removeStageConfig: () => {
     set({ stageConfig: null })
-    
+
     // Remover stageConfig de todas as cenas
     const { scenes } = get()
     if (scenes.length > 0) {
@@ -1297,20 +1297,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }))
     }
   },
-  
+
   centerStage: () => {
     const { stageConfig, viewport } = get()
     if (!stageConfig) return
-    
+
     // Centralizar o palco no viewport atual
     // Converter coordenadas do viewport para coordenadas do canvas
     const viewportCenterX = -viewport.x / viewport.zoom
     const viewportCenterY = -viewport.y / viewport.zoom
-    
+
     // Posicionar o palco no centro do viewport
     const centerX = viewportCenterX - stageConfig.width / 2
     const centerY = viewportCenterY - stageConfig.height / 2
-    
+
     set({
       stageConfig: {
         ...stageConfig,
@@ -1395,31 +1395,31 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   combineShapesIntoStage: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const selectedShapes = elementIds
       .map(id => elements.find(el => el.id === id))
       .filter(el => el && (el.type === 'rectangle' || el.type === 'circle'))
-    
+
     if (selectedShapes.length < 2) return
-    
+
     // Find rectangle and circle
     const rectangle = selectedShapes.find(el => el.type === 'rectangle')
     const circle = selectedShapes.find(el => el.type === 'circle')
-    
+
     if (rectangle && circle) {
       // Calculate optimal positioning for a natural stage appearance
       const rectCenterX = rectangle.x + rectangle.width / 2
       const rectCenterY = rectangle.y + rectangle.height / 2
       const circleCenterX = circle.x + circle.width / 2
       const circleCenterY = circle.y + circle.height / 2
-      
+
       // Determine the unified bounding box
       const minX = Math.min(rectangle.x, circle.x)
       const minY = Math.min(rectangle.y, circle.y)
       const maxX = Math.max(rectangle.x + rectangle.width, circle.x + circle.width)
       const maxY = Math.max(rectangle.y + rectangle.height, circle.y + circle.height)
-      
+
       // Create a new unified stage element
       const stageElement: Omit<Element, 'id'> = {
         type: 'stage',
@@ -1441,7 +1441,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         circleStrokeColor: rectangle.strokeColor || '#000000', // Use same stroke as rectangle
         circleStrokeWidth: rectangle.strokeWidth || 2 // Use same stroke width
       }
-      
+
       // Remove original shapes and add unified stage
       set((state) => ({
         elements: [
@@ -1455,47 +1455,47 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       get().saveToHistory()
     }
   },
-  
+
   // Deixa operations
   updateDeixaAtual: (sceneIndex, deixa, autoFilled = false) => {
     set((state) => ({
-      scenes: state.scenes.map((scene, index) => 
-        index === sceneIndex 
+      scenes: state.scenes.map((scene, index) =>
+        index === sceneIndex
           ? { ...scene, deixaAtual: deixa, deixaAtualAutoFilled: autoFilled }
           : scene
       )
     }))
-    
+
     // Sincronizar com a cena anterior
     if (sceneIndex > 0) {
       get().syncDeixas(sceneIndex, 'atual', deixa)
     }
   },
-  
+
   updateDeixaSeguinte: (sceneIndex, deixa, autoFilled = false) => {
     set((state) => ({
-      scenes: state.scenes.map((scene, index) => 
-        index === sceneIndex 
+      scenes: state.scenes.map((scene, index) =>
+        index === sceneIndex
           ? { ...scene, deixaSeguinte: deixa, deixaSeguinteAutoFilled: autoFilled }
           : scene
       )
     }))
-    
+
     // Sincronizar com a próxima cena
     const { scenes } = get()
     if (sceneIndex < scenes.length - 1) {
       get().syncDeixas(sceneIndex, 'seguinte', deixa)
     }
   },
-  
+
   syncDeixas: (sceneIndex, field, value) => {
     const { scenes } = get()
-    
+
     if (field === 'atual' && sceneIndex > 0) {
       // Atualizar "deixa seguinte" da cena anterior
       set((state) => ({
-        scenes: state.scenes.map((scene, index) => 
-          index === sceneIndex - 1 
+        scenes: state.scenes.map((scene, index) =>
+          index === sceneIndex - 1
             ? { ...scene, deixaSeguinte: value, deixaSeguinteAutoFilled: true }
             : scene
         )
@@ -1503,48 +1503,48 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     } else if (field === 'seguinte' && sceneIndex < scenes.length - 1) {
       // Atualizar "deixa atual" da próxima cena
       set((state) => ({
-        scenes: state.scenes.map((scene, index) => 
-          index === sceneIndex + 1 
+        scenes: state.scenes.map((scene, index) =>
+          index === sceneIndex + 1
             ? { ...scene, deixaAtual: value, deixaAtualAutoFilled: true }
             : scene
         )
       }))
     }
   },
-  
+
   updateSceneNotes: (sceneIndex, notes) => {
     set((state) => ({
-      scenes: state.scenes.map((scene, index) => 
-        index === sceneIndex 
+      scenes: state.scenes.map((scene, index) =>
+        index === sceneIndex
           ? { ...scene, notes }
           : scene
       )
     }))
   },
-  
+
   removeActorFromAllScenes: (actorId) => {
     const { currentSceneIndex } = get()
-    
+
     set((state) => {
       // Remove elementos de ator de todas as cenas
       const updatedScenes = state.scenes.map(scene => ({
         ...scene,
-        elements: scene.elements.filter(element => 
+        elements: scene.elements.filter(element =>
           !(element.type === 'actor' && element.actorId === actorId)
         )
       }))
-      
+
       // Remove elementos de ator da cena atual também
-      const updatedElements = state.elements.filter(element => 
+      const updatedElements = state.elements.filter(element =>
         !(element.type === 'actor' && element.actorId === actorId)
       )
-      
+
       // Remove elementos selecionados se algum for do ator excluído
       const updatedSelectedElements = state.selectedElements.filter(elementId => {
         const element = state.elements.find(el => el.id === elementId)
         return !(element?.type === 'actor' && element?.actorId === actorId)
       })
-      
+
       return {
         scenes: updatedScenes,
         elements: updatedElements,
@@ -1560,12 +1560,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((state) => {
       const updatedScenes = state.scenes.map(scene => ({
         ...scene,
-        elements: scene.elements.filter(element => 
+        elements: scene.elements.filter(element =>
           !(element.type === 'object' && element.objectId === objectId)
         )
       }))
 
-      const updatedElements = state.elements.filter(element => 
+      const updatedElements = state.elements.filter(element =>
         !(element.type === 'object' && element.objectId === objectId)
       )
 
@@ -1580,148 +1580,148 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectedElements: updatedSelected
       }
     })
-    
+
     const { updateCurrentScene } = get()
     updateCurrentScene()
   },
-  
+
   // Alignment operations
   alignElementsLeft: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToAlign.length < 2) return
-    
+
     const leftmostX = Math.min(...elementsToAlign.map(el => el.x))
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
         elementIds.includes(el.id) ? { ...el, x: leftmostX } : el
       ),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   alignElementsCenter: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToAlign.length < 2) return
-    
+
     const centerX = elementsToAlign.reduce((sum, el) => sum + el.x + (el.width || 0) / 2, 0) / elementsToAlign.length
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
         elementIds.includes(el.id) ? { ...el, x: centerX - (el.width || 0) / 2 } : el
       ),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   alignElementsRight: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToAlign.length < 2) return
-    
+
     const rightmostX = Math.max(...elementsToAlign.map(el => el.x + (el.width || 0)))
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
         elementIds.includes(el.id) ? { ...el, x: rightmostX - (el.width || 0) } : el
       ),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   alignElementsTop: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToAlign.length < 2) return
-    
+
     const topmostY = Math.min(...elementsToAlign.map(el => el.y))
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
         elementIds.includes(el.id) ? { ...el, y: topmostY } : el
       ),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   alignElementsMiddle: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToAlign.length < 2) return
-    
+
     const centerY = elementsToAlign.reduce((sum, el) => sum + el.y + (el.height || 0) / 2, 0) / elementsToAlign.length
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
         elementIds.includes(el.id) ? { ...el, y: centerY - (el.height || 0) / 2 } : el
       ),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   alignElementsBottom: (elementIds) => {
     if (elementIds.length < 2) return
-    
+
     const { elements } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToAlign.length < 2) return
-    
+
     const bottommostY = Math.max(...elementsToAlign.map(el => el.y + (el.height || 0)))
-    
+
     set((state) => ({
       elements: state.elements.map((el) =>
         elementIds.includes(el.id) ? { ...el, y: bottommostY - (el.height || 0) } : el
       ),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   distributeElementsHorizontally: (elementIds) => {
     if (elementIds.length < 3) return
-    
+
     const { elements } = get()
     const elementsToDistribute = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToDistribute.length < 3) return
-    
+
     // Sort elements by x position
     const sortedElements = [...elementsToDistribute].sort((a, b) => a.x - b.x)
-    
+
     const leftmostX = sortedElements[0].x
     const rightmostX = sortedElements[sortedElements.length - 1].x + (sortedElements[sortedElements.length - 1].width || 0)
     const totalWidth = rightmostX - leftmostX
     const spacing = totalWidth / (sortedElements.length - 1)
-    
+
     set((state) => ({
       elements: state.elements.map((el) => {
         const index = sortedElements.findIndex(sorted => sorted.id === el.id)
@@ -1731,27 +1731,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return el
       }),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   distributeElementsVertically: (elementIds) => {
     if (elementIds.length < 3) return
-    
+
     const { elements } = get()
     const elementsToDistribute = elements.filter(el => elementIds.includes(el.id))
-    
+
     if (elementsToDistribute.length < 3) return
-    
+
     // Sort elements by y position
     const sortedElements = [...elementsToDistribute].sort((a, b) => a.y - b.y)
-    
+
     const topmostY = sortedElements[0].y
     const bottommostY = sortedElements[sortedElements.length - 1].y + (sortedElements[sortedElements.length - 1].height || 0)
     const totalHeight = bottommostY - topmostY
     const spacing = totalHeight / (sortedElements.length - 1)
-    
+
     set((state) => ({
       elements: state.elements.map((el) => {
         const index = sortedElements.findIndex(sorted => sorted.id === el.id)
@@ -1761,18 +1761,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         return el
       }),
     }))
-    
+
     get().saveToHistory()
     get().updateCurrentScene()
   },
-  
+
   // Store reset
   resetStore: () => {
     const { slideshowTimer } = get()
     if (slideshowTimer) {
       clearInterval(slideshowTimer)
     }
-    
+
     set({
       elements: [],
       groups: [],
@@ -1800,7 +1800,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       hoverPreviewColor: '#1d4ed8',
     })
   },
-  
+
   initializeHistory: () => {
     const { elements, groups, selectedElements } = get()
 
@@ -1817,7 +1817,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       canRedo: false,
     })
   },
-  
+
   // Initialize with sample data
   initializeWithSampleData: () => {
     const sampleStageConfig: StageConfig = {
