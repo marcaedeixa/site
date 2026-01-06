@@ -2555,12 +2555,38 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           }
           ctx.restore()
         } else if (element.points && element.points.length > 1) {
-          // Render freehand path
+          // Render freehand path with smooth curves using quadratic bezier
           ctx.beginPath()
-          ctx.moveTo(element.points[0].x, element.points[0].y)
-          element.points.slice(1).forEach(point => {
-            ctx.lineTo(point.x, point.y)
-          })
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
+
+          const points = element.points
+
+          if (points.length === 2) {
+            // Just draw a line for 2 points
+            ctx.moveTo(points[0].x, points[0].y)
+            ctx.lineTo(points[1].x, points[1].y)
+          } else {
+            // Use quadratic curves through midpoints for smooth path
+            ctx.moveTo(points[0].x, points[0].y)
+
+            for (let i = 0; i < points.length - 1; i++) {
+              const current = points[i]
+              const next = points[i + 1]
+
+              // Calculate midpoint
+              const midX = (current.x + next.x) / 2
+              const midY = (current.y + next.y) / 2
+
+              // Draw quadratic curve to midpoint, using current point as control
+              ctx.quadraticCurveTo(current.x, current.y, midX, midY)
+            }
+
+            // Draw line to last point
+            const lastPoint = points[points.length - 1]
+            ctx.lineTo(lastPoint.x, lastPoint.y)
+          }
+
           ctx.stroke()
         }
         break

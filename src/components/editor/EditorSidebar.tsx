@@ -477,7 +477,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                     {selectedElement && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label className="text-xs">X</Label>
+                          <Label className="text-xs">Localização horizontal (m)</Label>
                           <Input
                             type="number"
                             value={selectedElement.x}
@@ -486,7 +486,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Y</Label>
+                          <Label className="text-xs">Localização vertical (m)</Label>
                           <Input
                             type="number"
                             value={selectedElement.y}
