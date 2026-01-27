@@ -1146,12 +1146,29 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             setIsResizing(true)
             setResizeHandle(handleId)
             setResizeStartPoint(canvasPoint)
-            setResizeStartBounds({
+
+            // Use pathBounds for path elements (result of boolean operations) if available
+            // This ensures the resize works correctly with the actual visual bounds
+            let initialBounds = {
               x: element.x,
               y: element.y,
               width: element.width || 0,
               height: element.height || 0
-            })
+            }
+
+            // For path elements, ensure we have valid dimensions
+            if (element.type === 'path') {
+              // If pathBounds exists and current dimensions are 0 or invalid, use pathBounds
+              if (element.pathBounds && (initialBounds.width <= 0 || initialBounds.height <= 0)) {
+                initialBounds.width = element.pathBounds.width
+                initialBounds.height = element.pathBounds.height
+              }
+              // Ensure minimum size for paths
+              initialBounds.width = Math.max(10, initialBounds.width)
+              initialBounds.height = Math.max(10, initialBounds.height)
+            }
+
+            setResizeStartBounds(initialBounds)
             return
           }
         }
@@ -1174,6 +1191,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         // Get all elements in the same group as the clicked element
         const groupElements = getGroupElements(clickedElement.id)
 
+        // Determine what elements will be selected/moved BEFORE updating selection
+        let elementsToMove: string[]
+
         if (e.ctrlKey || e.metaKey) {
           // Multi-select - toggle group selection
           const isGroupSelected = groupElements.every(id => selectedElements.includes(id))
@@ -1181,18 +1201,17 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             ? selectedElements.filter(id => !groupElements.includes(id))
             : [...new Set([...selectedElements, ...groupElements])]
           onSelectElements(newSelection)
+          // For multi-select, use the new computed selection
+          elementsToMove = newSelection
         } else {
           // Single select - select entire group if not already selected
           const isGroupSelected = groupElements.every(id => selectedElements.includes(id))
           if (!isGroupSelected) {
             onSelectElements(groupElements)
           }
+          // For single select, use the group elements (what we just selected or was already selected)
+          elementsToMove = isGroupSelected ? selectedElements : groupElements
         }
-
-        // Start dragging - use current selection or group elements, but filter out locked ones
-        const elementsToMove = selectedElements.some(id => groupElements.includes(id))
-          ? selectedElements
-          : groupElements
 
         // Filter out locked elements from dragging
         const unlocked = elementsToMove.filter(id => !isElementLocked(id))

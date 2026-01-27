@@ -172,11 +172,16 @@ interface EditorStore {
   setElements: (elements: Element[]) => void
   setViewport: (viewport: Viewport) => void
 
+  // Clipboard
+  clipboard: Element[]
+
   // Element operations
   addElement: (element: Omit<Element, 'id'>) => void
   updateElement: (id: string, updates: Partial<Element>, options?: { commitHistory?: boolean }) => void
   deleteElements: (ids: string[]) => void
   duplicateElements: (ids: string[]) => void
+  copyElements: (ids: string[]) => void
+  pasteElements: () => void
 
   // Selection
   selectElements: (ids: string[]) => void
@@ -189,6 +194,11 @@ interface EditorStore {
   redo: () => void
   canUndo: boolean
   canRedo: boolean
+
+  // Batch operations (to prevent multiple history entries for compound operations)
+  _isInBatch: boolean
+  startBatch: () => void
+  endBatch: () => void
 
   // Drawing
   startDrawing: (element: Omit<Element, 'id'>) => void
@@ -265,6 +275,7 @@ interface EditorStore {
   removeObjectFromAllScenes: (objectId: string) => void
 
   // Alignment operations
+  _getElementBounds: (el: Element) => { left: number; right: number; top: number; bottom: number; width: number; height: number; centerX: number; centerY: number }
   alignElementsLeft: (elementIds: string[]) => void
   alignElementsCenter: (elementIds: string[]) => void
   alignElementsRight: (elementIds: string[]) => void
@@ -295,6 +306,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   historyIndex: -1,
   canUndo: false,
   canRedo: false,
+  _isInBatch: false,
+  clipboard: [],
 
   // Stage configuration
   stageConfig: null,
@@ -510,6 +523,50 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().saveToHistory()
   },
 
+  copyElements: (ids) => {
+    const { elements } = get()
+    // Only copy allowed types (shapes, arrows, textboxes - not actors or objects)
+    const allowedTypes = ['rectangle', 'circle', 'line', 'arrow', 'path', 'textbox', 'text']
+    const elementsToCopy = elements.filter(
+      (el) => ids.includes(el.id) && allowedTypes.includes(el.type)
+    )
+
+    if (elementsToCopy.length === 0) return
+
+    // Deep copy elements to clipboard
+    const copiedElements = elementsToCopy.map((el) => ({
+      ...JSON.parse(JSON.stringify(el))
+    }))
+
+    set({ clipboard: copiedElements })
+  },
+
+  pasteElements: () => {
+    const { clipboard, elements } = get()
+    if (clipboard.length === 0) return
+
+    const maxZIndex = elements.length > 0 ? Math.max(...elements.map(el => el.zIndex || 0)) : 0
+
+    // Create new elements with new IDs and offset position
+    const pastedElements = clipboard.map((el, index) => ({
+      ...el,
+      id: nanoid(),
+      x: el.x + 20,
+      y: el.y + 20,
+      zIndex: maxZIndex + index + 1,
+      // Remove any group associations from pasted elements
+      groupId: undefined
+    }))
+
+    set((state) => ({
+      elements: [...state.elements, ...pastedElements],
+      selectedElements: pastedElements.map((el) => el.id),
+    }))
+
+    get().saveToHistory()
+    get().updateCurrentScene()
+  },
+
   // Selection
   selectElements: (ids) => set({ selectedElements: ids }),
   clearSelection: () => set({ selectedElements: [] }),
@@ -525,8 +582,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })
   },
 
+  // Batch operations
+  startBatch: () => {
+    set({ _isInBatch: true })
+  },
+
+  endBatch: () => {
+    set({ _isInBatch: false })
+    get().saveToHistory()
+    get().updateCurrentScene()
+  },
+
   // History
   saveToHistory: () => {
+    // Skip saving if we're in a batch operation
+    if (get()._isInBatch) return
+
     const { elements, groups, selectedElements, history, historyIndex } = get()
 
     const newHistoryState: HistoryState = {
@@ -1586,20 +1657,54 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   // Alignment operations
+  // Helper function to get normalized bounds for elements (handles lines/arrows with negative width/height)
+  _getElementBounds: (el: Element) => {
+    const width = el.width || 0
+    const height = el.height || 0
+
+    // For lines and arrows, width/height can be negative depending on draw direction
+    if (el.type === 'line' || el.type === 'arrow') {
+      return {
+        left: Math.min(el.x, el.x + width),
+        right: Math.max(el.x, el.x + width),
+        top: Math.min(el.y, el.y + height),
+        bottom: Math.max(el.y, el.y + height),
+        width: Math.abs(width),
+        height: Math.abs(height),
+        centerX: el.x + width / 2,
+        centerY: el.y + height / 2
+      }
+    }
+
+    return {
+      left: el.x,
+      right: el.x + width,
+      top: el.y,
+      bottom: el.y + height,
+      width: width,
+      height: height,
+      centerX: el.x + width / 2,
+      centerY: el.y + height / 2
+    }
+  },
+
   alignElementsLeft: (elementIds) => {
     if (elementIds.length < 2) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToAlign.length < 2) return
 
-    const leftmostX = Math.min(...elementsToAlign.map(el => el.x))
+    const leftmostX = Math.min(...elementsToAlign.map(el => _getElementBounds(el).left))
 
     set((state) => ({
-      elements: state.elements.map((el) =>
-        elementIds.includes(el.id) ? { ...el, x: leftmostX } : el
-      ),
+      elements: state.elements.map((el) => {
+        if (!elementIds.includes(el.id)) return el
+        const bounds = _getElementBounds(el)
+        const offsetX = bounds.left - el.x
+        return { ...el, x: leftmostX - offsetX }
+      }),
     }))
 
     get().saveToHistory()
@@ -1609,17 +1714,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   alignElementsCenter: (elementIds) => {
     if (elementIds.length < 2) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToAlign.length < 2) return
 
-    const centerX = elementsToAlign.reduce((sum, el) => sum + el.x + (el.width || 0) / 2, 0) / elementsToAlign.length
+    const centerX = elementsToAlign.reduce((sum, el) => sum + _getElementBounds(el).centerX, 0) / elementsToAlign.length
 
     set((state) => ({
-      elements: state.elements.map((el) =>
-        elementIds.includes(el.id) ? { ...el, x: centerX - (el.width || 0) / 2 } : el
-      ),
+      elements: state.elements.map((el) => {
+        if (!elementIds.includes(el.id)) return el
+        const bounds = _getElementBounds(el)
+        const currentCenterX = bounds.centerX
+        return { ...el, x: el.x + (centerX - currentCenterX) }
+      }),
     }))
 
     get().saveToHistory()
@@ -1629,17 +1737,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   alignElementsRight: (elementIds) => {
     if (elementIds.length < 2) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToAlign.length < 2) return
 
-    const rightmostX = Math.max(...elementsToAlign.map(el => el.x + (el.width || 0)))
+    const rightmostX = Math.max(...elementsToAlign.map(el => _getElementBounds(el).right))
 
     set((state) => ({
-      elements: state.elements.map((el) =>
-        elementIds.includes(el.id) ? { ...el, x: rightmostX - (el.width || 0) } : el
-      ),
+      elements: state.elements.map((el) => {
+        if (!elementIds.includes(el.id)) return el
+        const bounds = _getElementBounds(el)
+        const offsetToRight = bounds.right - el.x
+        return { ...el, x: rightmostX - offsetToRight }
+      }),
     }))
 
     get().saveToHistory()
@@ -1649,17 +1760,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   alignElementsTop: (elementIds) => {
     if (elementIds.length < 2) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToAlign.length < 2) return
 
-    const topmostY = Math.min(...elementsToAlign.map(el => el.y))
+    const topmostY = Math.min(...elementsToAlign.map(el => _getElementBounds(el).top))
 
     set((state) => ({
-      elements: state.elements.map((el) =>
-        elementIds.includes(el.id) ? { ...el, y: topmostY } : el
-      ),
+      elements: state.elements.map((el) => {
+        if (!elementIds.includes(el.id)) return el
+        const bounds = _getElementBounds(el)
+        const offsetY = bounds.top - el.y
+        return { ...el, y: topmostY - offsetY }
+      }),
     }))
 
     get().saveToHistory()
@@ -1669,17 +1783,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   alignElementsMiddle: (elementIds) => {
     if (elementIds.length < 2) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToAlign.length < 2) return
 
-    const centerY = elementsToAlign.reduce((sum, el) => sum + el.y + (el.height || 0) / 2, 0) / elementsToAlign.length
+    const centerY = elementsToAlign.reduce((sum, el) => sum + _getElementBounds(el).centerY, 0) / elementsToAlign.length
 
     set((state) => ({
-      elements: state.elements.map((el) =>
-        elementIds.includes(el.id) ? { ...el, y: centerY - (el.height || 0) / 2 } : el
-      ),
+      elements: state.elements.map((el) => {
+        if (!elementIds.includes(el.id)) return el
+        const bounds = _getElementBounds(el)
+        const currentCenterY = bounds.centerY
+        return { ...el, y: el.y + (centerY - currentCenterY) }
+      }),
     }))
 
     get().saveToHistory()
@@ -1689,17 +1806,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   alignElementsBottom: (elementIds) => {
     if (elementIds.length < 2) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToAlign = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToAlign.length < 2) return
 
-    const bottommostY = Math.max(...elementsToAlign.map(el => el.y + (el.height || 0)))
+    const bottommostY = Math.max(...elementsToAlign.map(el => _getElementBounds(el).bottom))
 
     set((state) => ({
-      elements: state.elements.map((el) =>
-        elementIds.includes(el.id) ? { ...el, y: bottommostY - (el.height || 0) } : el
-      ),
+      elements: state.elements.map((el) => {
+        if (!elementIds.includes(el.id)) return el
+        const bounds = _getElementBounds(el)
+        const offsetToBottom = bounds.bottom - el.y
+        return { ...el, y: bottommostY - offsetToBottom }
+      }),
     }))
 
     get().saveToHistory()
@@ -1709,16 +1829,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   distributeElementsHorizontally: (elementIds) => {
     if (elementIds.length < 3) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToDistribute = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToDistribute.length < 3) return
 
-    // Sort elements by x position
-    const sortedElements = [...elementsToDistribute].sort((a, b) => a.x - b.x)
+    // Sort elements by left position (normalized)
+    const sortedElements = [...elementsToDistribute].sort((a, b) => _getElementBounds(a).left - _getElementBounds(b).left)
 
-    const leftmostX = sortedElements[0].x
-    const rightmostX = sortedElements[sortedElements.length - 1].x + (sortedElements[sortedElements.length - 1].width || 0)
+    const firstBounds = _getElementBounds(sortedElements[0])
+    const lastBounds = _getElementBounds(sortedElements[sortedElements.length - 1])
+    const leftmostX = firstBounds.left
+    const rightmostX = lastBounds.right
     const totalWidth = rightmostX - leftmostX
     const spacing = totalWidth / (sortedElements.length - 1)
 
@@ -1726,7 +1848,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       elements: state.elements.map((el) => {
         const index = sortedElements.findIndex(sorted => sorted.id === el.id)
         if (index !== -1 && index > 0 && index < sortedElements.length - 1) {
-          return { ...el, x: leftmostX + spacing * index - (el.width || 0) / 2 }
+          const bounds = _getElementBounds(el)
+          const targetCenterX = leftmostX + spacing * index
+          return { ...el, x: el.x + (targetCenterX - bounds.centerX) }
         }
         return el
       }),
@@ -1739,16 +1863,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   distributeElementsVertically: (elementIds) => {
     if (elementIds.length < 3) return
 
-    const { elements } = get()
+    const { elements, _getElementBounds } = get()
     const elementsToDistribute = elements.filter(el => elementIds.includes(el.id))
 
     if (elementsToDistribute.length < 3) return
 
-    // Sort elements by y position
-    const sortedElements = [...elementsToDistribute].sort((a, b) => a.y - b.y)
+    // Sort elements by top position (normalized)
+    const sortedElements = [...elementsToDistribute].sort((a, b) => _getElementBounds(a).top - _getElementBounds(b).top)
 
-    const topmostY = sortedElements[0].y
-    const bottommostY = sortedElements[sortedElements.length - 1].y + (sortedElements[sortedElements.length - 1].height || 0)
+    const firstBounds = _getElementBounds(sortedElements[0])
+    const lastBounds = _getElementBounds(sortedElements[sortedElements.length - 1])
+    const topmostY = firstBounds.top
+    const bottommostY = lastBounds.bottom
     const totalHeight = bottommostY - topmostY
     const spacing = totalHeight / (sortedElements.length - 1)
 
@@ -1756,7 +1882,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       elements: state.elements.map((el) => {
         const index = sortedElements.findIndex(sorted => sorted.id === el.id)
         if (index !== -1 && index > 0 && index < sortedElements.length - 1) {
-          return { ...el, y: topmostY + spacing * index - (el.height || 0) / 2 }
+          const bounds = _getElementBounds(el)
+          const targetCenterY = topmostY + spacing * index
+          return { ...el, y: el.y + (targetCenterY - bounds.centerY) }
         }
         return el
       }),

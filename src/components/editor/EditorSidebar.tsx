@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -373,37 +373,79 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     label: string
     value: string
     onChange: (color: string) => void
-  }) => (
-    <div className="space-y-2">
-      <Label className="text-sm font-medium">{label}</Label>
-      <div className="flex items-center gap-2">
-        <Input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-12 h-8 p-1 border rounded"
-        />
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="flex-1 text-xs"
-          placeholder="#000000"
-        />
-      </div>
-      <div className="grid grid-cols-5 gap-1">
-        {colorPresets.map((color) => (
-          <button
-            key={color}
-            onClick={() => onChange(color)}
-            className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
-            style={{ backgroundColor: color }}
-            title={color}
+  }) => {
+    const [localValue, setLocalValue] = useState(value)
+    const [isFocused, setIsFocused] = useState(false)
+
+    // Update local value when external value changes (but not while user is typing)
+    useEffect(() => {
+      if (!isFocused) {
+        setLocalValue(value)
+      }
+    }, [value, isFocused])
+
+    const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setLocalValue(e.target.value)
+    }
+
+    const handleTextBlur = () => {
+      setIsFocused(false)
+      // Only apply if it's a valid color format
+      if (localValue && (localValue.startsWith('#') || /^[a-fA-F0-9]{3,6}$/.test(localValue))) {
+        const colorValue = localValue.startsWith('#') ? localValue : `#${localValue}`
+        onChange(colorValue)
+      } else {
+        setLocalValue(value) // Reset to original if invalid
+      }
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
+        (e.target as HTMLInputElement).blur()
+      } else if (e.key === 'Escape') {
+        setLocalValue(value)
+        setIsFocused(false)
+      }
+    }
+
+    return (
+      <div className="space-y-2">
+        <Label className="text-sm font-medium">{label}</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            type="color"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="w-12 h-8 p-1 border rounded"
           />
-        ))}
+          <Input
+            type="text"
+            value={localValue}
+            onChange={handleTextChange}
+            onFocus={() => setIsFocused(true)}
+            onBlur={handleTextBlur}
+            onKeyDown={handleKeyDown}
+            className="flex-1 text-xs"
+            placeholder="#000000"
+          />
+        </div>
+        <div className="grid grid-cols-5 gap-1">
+          {colorPresets.map((color) => (
+            <button
+              key={color}
+              onClick={() => {
+                setLocalValue(color)
+                onChange(color)
+              }}
+              className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+              style={{ backgroundColor: color }}
+              title={color}
+            />
+          ))}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const [isCollapsed, setIsCollapsed] = useState(true)
 
@@ -587,6 +629,23 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             maxLength={2}
                             placeholder="Ex: AB"
                           />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Cor do Ator</Label>
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="color"
+                              value={selectedElement.actorColor || '#3b82f6'}
+                              onChange={(e) => handleActorPropertyChange('actorColor', e.target.value)}
+                              className="h-8 w-12 cursor-pointer rounded border"
+                            />
+                            <Input
+                              value={selectedElement.actorColor || '#3b82f6'}
+                              onChange={(e) => handleActorPropertyChange('actorColor', e.target.value)}
+                              className="h-8 flex-1 font-mono text-xs"
+                              placeholder="#3b82f6"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}

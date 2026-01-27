@@ -35,12 +35,15 @@ export function ScenesTab() {
     pauseSlideshow,
     nextScene,
     previousScene,
-    setSlideshowInterval
+    setSlideshowInterval,
+    reorderScenes
   } = useEditorStore()
 
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null)
   const [editingName, setEditingName] = useState('')
   const [intervalInput, setIntervalInput] = useState(slideshowInterval / 1000)
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
 
   // Atualizar input do intervalo quando o valor do store mudar
   useEffect(() => {
@@ -95,6 +98,39 @@ export function ScenesTab() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  // Drag and drop handlers for reordering scenes
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', index.toString())
+  }
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedIndex !== null && index !== draggedIndex) {
+      setDropTargetIndex(index)
+    }
+  }
+
+  const handleDragLeave = () => {
+    setDropTargetIndex(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault()
+    if (draggedIndex !== null && draggedIndex !== targetIndex) {
+      reorderScenes(draggedIndex, targetIndex)
+    }
+    setDraggedIndex(null)
+    setDropTargetIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDropTargetIndex(null)
   }
 
   return (
@@ -203,14 +239,24 @@ export function ScenesTab() {
           </div>
         ) : (
           scenes.map((scene, index) => (
-            <Card 
+            <Card
               key={scene.id}
+              draggable={!isPlayingSlideshow && editingSceneIndex !== index}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
               className={`transition-all cursor-pointer ${
-                index === currentSceneIndex 
-                  ? 'ring-2 ring-blue-500 bg-blue-50' 
+                index === currentSceneIndex
+                  ? 'ring-2 ring-blue-500 bg-blue-50'
                   : 'hover:shadow-md'
               } ${
                 isPlayingSlideshow ? 'pointer-events-none opacity-75' : ''
+              } ${
+                draggedIndex === index ? 'opacity-50' : ''
+              } ${
+                dropTargetIndex === index ? 'ring-2 ring-green-400 bg-green-50' : ''
               }`}
               onClick={() => handleLoadScene(index)}
             >

@@ -56,16 +56,14 @@ interface EditorToolbarProps {
   booleanOpsEnabled?: boolean
 }
 
-const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string; shortcut?: string }[] = [
-  { id: 'select', icon: MousePointer2, label: 'Seleção', shortcut: 'V' },
-  { id: 'rectangle', icon: Square, label: 'Retângulo', shortcut: 'R' },
-  { id: 'circle', icon: Circle, label: 'Círculo', shortcut: 'C' },
-  { id: 'line', icon: Minus, label: 'Linha', shortcut: 'L' },
-  { id: 'arrow', icon: ArrowRight, label: 'Seta', shortcut: 'A' },
-
-
-  { id: 'pen', icon: PenTool, label: 'Caneta', shortcut: 'P' },
-  { id: 'eraser', icon: Eraser, label: 'Borracha', shortcut: 'E' },
+const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>>; label: string }[] = [
+  { id: 'select', icon: MousePointer2, label: 'Seleção' },
+  { id: 'rectangle', icon: Square, label: 'Retângulo' },
+  { id: 'circle', icon: Circle, label: 'Círculo' },
+  { id: 'line', icon: Minus, label: 'Linha' },
+  { id: 'arrow', icon: ArrowRight, label: 'Seta' },
+  { id: 'pen', icon: PenTool, label: 'Caneta' },
+  { id: 'eraser', icon: Eraser, label: 'Borracha' },
 ]
 
 export function EditorToolbar({
@@ -260,7 +258,7 @@ export function EditorToolbar({
               variant={selectedTool === tool.id ? "default" : "ghost"}
               size="sm"
               onClick={() => handleToolSelect(tool.id)}
-              title={`${tool.label} ${tool.shortcut ? `(${tool.shortcut})` : ''}`}
+              title={tool.label}
               className={cn(
                 "w-12 h-12 p-0",
                 selectedTool === tool.id && "bg-blue-100 text-blue-700 hover:bg-blue-200"

@@ -17,7 +17,7 @@ export function SceneNotesPanel() {
   useEffect(() => {
     if (!currentScene) {
       setLocalNotes('')
-      setIsCollapsed(true)
+      // Don't reset isCollapsed - keep user's preference
       return
     }
 

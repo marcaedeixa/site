@@ -54,7 +54,11 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
     scenes,
     nextScene,
     previousScene,
-    isFullscreenSlideshow
+    isFullscreenSlideshow,
+    startBatch,
+    endBatch,
+    copyElements,
+    pasteElements
   } = useEditorStore()
 
   // Auto-save functionality
@@ -186,12 +190,15 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
     try {
       const result = await uniteMultipleShapes(shapeElements)
-      
+
       if (result.success && result.svgPath) {
         const referenceElement = shapeElements[0]
         const idsToRemove = shapeElements.map(el => el.id)
+
+        // Use batch to create single history entry
+        startBatch()
         deleteElements(idsToRemove)
-        
+
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
@@ -208,11 +215,12 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           pathData: result.svgPath,
           pathBounds: result.bounds
         } as any)
+        endBatch()
       }
     } catch (error) {
       console.error('Erro na operação de união:', error)
     }
-  }, [getSelectedShapeElements, deleteElements, addElement])
+  }, [getSelectedShapeElements, deleteElements, addElement, startBatch, endBatch])
 
   const handleSubtractElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
@@ -225,17 +233,19 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       const [first, second] = shapeElements
       const shape1 = convertElementToShape(first)
       const shape2 = convertElementToShape(second)
-      
+
       if (!shape1 || !shape2) {
         console.error('Não foi possível converter elementos para shapes')
         return
       }
-      
+
       const result = await performBooleanOperation(shape1, shape2, 'subtract')
-      
+
       if (result.success && result.svgPath) {
+        // Use batch to create single history entry
+        startBatch()
         deleteElements([first.id, second.id])
-        
+
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
@@ -252,11 +262,12 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           pathData: result.svgPath,
           pathBounds: result.bounds
         } as any)
+        endBatch()
       }
     } catch (error) {
       console.error('Erro na operação de subtração:', error)
     }
-  }, [getSelectedShapeElements, deleteElements, addElement])
+  }, [getSelectedShapeElements, deleteElements, addElement, startBatch, endBatch])
 
   const handleIntersectElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
@@ -269,17 +280,19 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       const [first, second] = shapeElements
       const shape1 = convertElementToShape(first)
       const shape2 = convertElementToShape(second)
-      
+
       if (!shape1 || !shape2) {
         console.error('Não foi possível converter elementos para shapes')
         return
       }
-      
+
       const result = await performBooleanOperation(shape1, shape2, 'intersect')
-      
+
       if (result.success && result.svgPath) {
+        // Use batch to create single history entry
+        startBatch()
         deleteElements([first.id, second.id])
-        
+
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
@@ -296,11 +309,12 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           pathData: result.svgPath,
           pathBounds: result.bounds
         } as any)
+        endBatch()
       }
     } catch (error) {
       console.error('Erro na operação de interseção:', error)
     }
-  }, [getSelectedShapeElements, deleteElements, addElement])
+  }, [getSelectedShapeElements, deleteElements, addElement, startBatch, endBatch])
 
   const handleExcludeElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
@@ -313,17 +327,19 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       const [first, second] = shapeElements
       const shape1 = convertElementToShape(first)
       const shape2 = convertElementToShape(second)
-      
+
       if (!shape1 || !shape2) {
         console.error('Não foi possível converter elementos para shapes')
         return
       }
-      
+
       const result = await performBooleanOperation(shape1, shape2, 'exclude')
-      
+
       if (result.success && result.svgPath) {
+        // Use batch to create single history entry
+        startBatch()
         deleteElements([first.id, second.id])
-        
+
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
@@ -340,11 +356,12 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           pathData: result.svgPath,
           pathBounds: result.bounds
         } as any)
+        endBatch()
       }
     } catch (error) {
       console.error('Erro na operação de exclusão:', error)
     }
-  }, [getSelectedShapeElements, deleteElements, addElement])
+  }, [getSelectedShapeElements, deleteElements, addElement, startBatch, endBatch])
 
   // Helper function to check if user is typing
   const isTyping = useCallback(() => {
@@ -391,6 +408,16 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
           case 'a':
             e.preventDefault()
             selectElements(elements.map(el => el.id))
+            break
+          case 'c':
+            e.preventDefault()
+            if (selectedElements.length > 0) {
+              copyElements(selectedElements)
+            }
+            break
+          case 'v':
+            e.preventDefault()
+            pasteElements()
             break
           case 'g':
             e.preventDefault()
@@ -476,7 +503,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [undo, redo, autoSave, selectElements, clearSelection, deleteElements, selectedElements, elements, handleGroupElements, handleUngroupElements, handleUnionElements, handleSubtractElements, handleIntersectElements, handleExcludeElements, bringToFront, sendToBack, bringForward, sendBackward, scenes, nextScene, previousScene])
+  }, [undo, redo, autoSave, selectElements, clearSelection, deleteElements, selectedElements, elements, handleGroupElements, handleUngroupElements, handleUnionElements, handleSubtractElements, handleIntersectElements, handleExcludeElements, bringToFront, sendToBack, bringForward, sendBackward, scenes, nextScene, previousScene, copyElements, pasteElements])
 
   if (isLoading) {
     return (

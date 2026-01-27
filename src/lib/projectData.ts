@@ -126,6 +126,10 @@ export async function exportProjectData(
       return JSON.stringify(exportData, null, 2)
     
     case 'svg':
+      // If no specific scene index and multiple scenes exist, export all as ZIP
+      if (sceneIndex === undefined && data.scenes && data.scenes.length > 1) {
+        return await exportAllScenesAsSvgZip(data)
+      }
       return generateSVG(elementsToExport, activeStageConfig)
     
     case 'png':
@@ -962,6 +966,43 @@ async function exportAllScenesAsZip(projectData: ProjectData): Promise<Blob> {
     const fileName = `${String(index + 1).padStart(2, '0')}-${safeName}.png`
     await addBlobToZip(fileName, blob)
   }))
+
+  if (Object.keys(files).length === 0) {
+    return new Blob([], { type: 'application/zip' })
+  }
+
+  const zipped = zipSync(files, { level: 6 })
+  return new Blob([zipped], { type: 'application/zip' })
+}
+
+async function exportAllScenesAsSvgZip(projectData: ProjectData): Promise<Blob> {
+  const files: Record<string, Uint8Array> = {}
+
+  const addStringToZip = (filename: string, content: string) => {
+    const encoder = new TextEncoder()
+    files[filename] = encoder.encode(content)
+  }
+
+  // Export current project state if it has elements
+  if (projectData.elements && projectData.elements.length > 0) {
+    const svgContent = generateSVG(
+      projectData.elements,
+      projectData.stageConfig ?? null
+    )
+    addStringToZip('projeto-atual.svg', svgContent)
+  }
+
+  const scenes = projectData.scenes ?? []
+
+  // Export each scene as SVG
+  scenes.forEach((scene, index) => {
+    const elements = scene.elements ?? []
+    const stage = scene.stageConfig ?? projectData.stageConfig ?? null
+    const svgContent = generateSVG(elements, stage)
+    const safeName = sanitizeFileName(scene.name || `Cena_${index + 1}`)
+    const fileName = `${String(index + 1).padStart(2, '0')}-${safeName}.svg`
+    addStringToZip(fileName, svgContent)
+  })
 
   if (Object.keys(files).length === 0) {
     return new Blob([], { type: 'application/zip' })

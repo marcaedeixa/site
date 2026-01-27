@@ -271,7 +271,7 @@ export function EditorTopToolbar({
   }
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 justify-between">
+    <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2 md:gap-4 justify-between flex-wrap">
       {/* Controles principais */}
       <div className="flex items-center gap-4">
         {/* Zoom Controls */}
@@ -498,24 +498,26 @@ export function EditorTopToolbar({
       </div>
 
       {/* Botões de cadastro na extremidade direita */}
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-1 md:space-x-2 flex-shrink-0">
         <Button
           onClick={handleOpenActorModal}
           variant="default"
           size="sm"
           title="Cadastrar Ator"
+          className="px-2 md:px-3"
         >
-          <User className="h-4 w-4 mr-2" />
-          Cadastrar Ator
+          <User className="h-4 w-4 md:mr-2" />
+          <span className="hidden md:inline">Cadastrar Ator</span>
         </Button>
         <Button
           onClick={handleOpenObjectModal}
           variant="default"
           size="sm"
           title="Cadastrar Objeto"
+          className="px-2 md:px-3"
         >
-          <Box className="h-4 w-4 mr-2" />
-          Cadastrar Objeto
+          <Box className="h-4 w-4 md:mr-2" />
+          <span className="hidden md:inline">Cadastrar Objeto</span>
         </Button>
       </div>
 
