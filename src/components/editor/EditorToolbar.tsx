@@ -1,21 +1,13 @@
 'use client'
 
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Slider } from '@/components/ui/slider'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   MousePointer2,
   Square,
   Circle,
   Minus,
   ArrowRight,
-  Type,
   PenTool,
   Eraser,
   Group,
@@ -78,66 +70,10 @@ export function EditorToolbar({
   onExcludeElements,
   booleanOpsEnabled = true
 }: EditorToolbarProps) {
-  const [showTextBoxDialog, setShowTextBoxDialog] = useState(false)
-  const [textBoxConfig, setTextBoxConfig] = useState({
-    text: '',
-    width: 200,
-    fontSize: 16,
-    previewMode: 'full' as 'full' | 'start' | 'end' | 'start-end'
-  })
 
   const handleToolSelect = (tool: Tool) => {
     const { setSelectedTool } = useEditorStore.getState()
     setSelectedTool(tool)
-  }
-
-  const handleAddTextBox = () => {
-    if (!textBoxConfig.text.trim()) return
-
-    const { viewport, addElement } = useEditorStore.getState()
-    const centerX = -viewport.x + (window.innerWidth / 2) / viewport.zoom
-    const centerY = -viewport.y + (window.innerHeight / 2) / viewport.zoom
-
-    const lineHeight = textBoxConfig.fontSize * 1.2
-    const padding = 16
-    const defaultHeight = Math.max(textBoxConfig.fontSize * 1.5, lineHeight + padding)
-
-    addElement({
-      type: 'textbox',
-      x: centerX - textBoxConfig.width / 2,
-      y: centerY - 20,
-      width: textBoxConfig.width,
-      height: defaultHeight,
-      text: textBoxConfig.text,
-      fontSize: textBoxConfig.fontSize,
-      strokeColor: '#000000',
-      fillColor: 'transparent',
-      strokeWidth: 1,
-      opacity: 1,
-      zIndex: 1000,
-      textBoxConfig: {
-        previewMode: textBoxConfig.previewMode,
-        fullText: textBoxConfig.text
-      }
-    } as any)
-
-    setTextBoxConfig({
-      text: '',
-      width: 200,
-      fontSize: 16,
-      previewMode: 'full'
-    })
-    setShowTextBoxDialog(false)
-  }
-
-  const getPreviewText = (text: string, mode: string) => {
-    if (mode === 'full' || text.length <= 20) return text
-    switch (mode) {
-      case 'start': return text.substring(0, 15) + '...'
-      case 'end': return '...' + text.substring(text.length - 15)
-      case 'start-end': return text.substring(0, 8) + '...' + text.substring(text.length - 8)
-      default: return text
-    }
   }
 
   const handleExport = async (format: 'json' | 'svg' | 'png') => {
@@ -270,128 +206,6 @@ export function EditorToolbar({
         })}
       </div>
 
-      <Separator orientation="horizontal" className="w-8" />
-
-      {/* Add Text Box Button */}
-      <Dialog open={showTextBoxDialog} onOpenChange={setShowTextBoxDialog}>
-        <DialogTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            title="Adicionar Caixa de Texto"
-            className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200"
-          >
-            <Type className="h-4 w-4" />
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Type className="h-4 w-4" />
-              Nova Caixa de Texto
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="text">Texto</Label>
-              <Textarea
-                id="text"
-                value={textBoxConfig.text}
-                onChange={(e) => setTextBoxConfig(prev => ({ ...prev, text: e.target.value }))}
-                placeholder="Digite o texto aqui..."
-                className="min-h-[80px]"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Configurações</h4>
-
-              <div>
-                <Label className="text-xs">Largura: {textBoxConfig.width}px</Label>
-                <Slider
-                  value={[textBoxConfig.width]}
-                  onValueChange={([value]) => setTextBoxConfig(prev => ({ ...prev, width: value }))}
-                  min={100}
-                  max={500}
-                  step={10}
-                  className="mt-2"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs">Tamanho da Fonte: {textBoxConfig.fontSize}px</Label>
-                <Slider
-                  value={[textBoxConfig.fontSize]}
-                  onValueChange={([value]) => setTextBoxConfig(prev => ({ ...prev, fontSize: value }))}
-                  min={8}
-                  max={48}
-                  step={1}
-                  className="mt-2"
-                />
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Prévia</h4>
-
-              <div>
-                <Label className="text-xs">Modo de Exibição</Label>
-                <Select
-                  value={textBoxConfig.previewMode}
-                  onValueChange={(value: any) => setTextBoxConfig(prev => ({ ...prev, previewMode: value }))}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="full">Mostrar texto completo</SelectItem>
-                    <SelectItem value="start">Mostrar início do texto</SelectItem>
-                    <SelectItem value="end">Mostrar final do texto</SelectItem>
-                    <SelectItem value="start-end">Mostrar início e final</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {textBoxConfig.text && (
-                <div className="p-3 bg-gray-50 rounded border">
-                  <Label className="text-xs text-gray-600">Prévia:</Label>
-                  <div
-                    className="mt-1 text-sm"
-                    style={{
-                      fontSize: `${Math.min(textBoxConfig.fontSize, 14)}px`,
-                      width: `${Math.min(textBoxConfig.width, 200)}px`,
-                      wordWrap: 'break-word'
-                    }}
-                  >
-                    {getPreviewText(textBoxConfig.text, textBoxConfig.previewMode)}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => setShowTextBoxDialog(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleAddTextBox}
-                disabled={!textBoxConfig.text.trim()}
-              >
-                Adicionar
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Separator orientation="horizontal" className="w-8" />
 
       {/* Boolean Operations */}
       {selectedElements.length >= 2 && (
