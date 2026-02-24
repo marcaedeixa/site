@@ -189,16 +189,16 @@ export function useTrialStatus(user: User | null): TrialStatus & { refresh: () =
         return
       }
 
-      // No subscription found
+      // No subscription found — user is on the free plan (permanent, no expiration)
       setStatus({
         isLoading: false,
         hasActiveSubscription: false,
         isTrialing: false,
         trialEndsAt: null,
         daysRemaining: 0,
-        isExpired: true, // Consider as expired if no subscription
+        isExpired: false,
         subscriptionStatus: null,
-        planName: null,
+        planName: 'Gratuito',
         error: null,
       })
 
@@ -225,7 +225,10 @@ export function useTrialStatus(user: User | null): TrialStatus & { refresh: () =
 // Helper function to check if user has access
 export function hasSubscriptionAccess(status: TrialStatus): boolean {
   if (status.isLoading) return true // Assume access while loading
-  return status.hasActiveSubscription && !status.isExpired
+  // Free plan is permanent — everyone has access. Only expired trials/subscriptions
+  // from the legacy system should be blocked, but under the new model
+  // even those users fall back to the free tier.
+  return true
 }
 
 // Helper function to get friendly status message
@@ -253,7 +256,7 @@ export function getStatusMessage(status: TrialStatus): string {
     return `Assinatura ativa: ${status.planName || 'Plano'}`
   }
   
-  return 'Sem assinatura ativa'
+  return 'Plano Gratuito'
 }
 
 // Helper function to get status color
@@ -269,6 +272,7 @@ export function getStatusColor(status: TrialStatus): 'green' | 'yellow' | 'red' 
   
   if (status.hasActiveSubscription) return 'green'
   
-  return 'red'
+  // Free plan — show as green (valid, permanent)
+  return 'green'
 }
 

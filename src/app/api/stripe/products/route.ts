@@ -66,7 +66,20 @@ async function syncProducts() {
     const supabase = await createClient(true) // service role
 
     // Produtos padrão para sincronizar
-    const defaultProducts = [
+    type RecurringInterval = 'month' | 'year'
+    type ProductPrice = {
+      unit_amount: number
+      currency: string
+      recurring: { interval: RecurringInterval }
+      nickname: string
+    }
+    type ProductConfig = {
+      name: string
+      description: string
+      prices: ProductPrice[]
+    }
+
+    const defaultProducts: ProductConfig[] = [
       {
         name: 'Plano Básico',
         description: 'Acesso às funcionalidades básicas da plataforma',
@@ -76,6 +89,12 @@ async function syncProducts() {
             currency: 'brl',
             recurring: { interval: 'month' },
             nickname: 'Básico Mensal'
+          },
+          {
+            unit_amount: 45099,
+            currency: 'brl',
+            recurring: { interval: 'year' },
+            nickname: 'Básico Anual'
           }
         ]
       },
@@ -109,14 +128,16 @@ async function syncProducts() {
       
       let product = existingProducts.data.find(p => p.name === productData.name)
       
-      if (!product) {
-        // Criar produto
-        product = await stripe.products.create({
-          name: productData.name,
-          description: productData.description,
-          active: true
-        })
-      }
+        if (!product) {
+          product = await stripe.products.create({
+            name: productData.name,
+            description: productData.description,
+            active: true,
+            metadata: {
+              plan_key: productData.name.toLowerCase().includes('básico') ? 'basic' : 'premium'
+            }
+          })
+        }
 
       // Criar preços se não existirem
       const existingPrices = await stripe.prices.list({

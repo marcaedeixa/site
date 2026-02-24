@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, type ChangeEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   Plus, 
@@ -13,7 +13,15 @@ import {
   Settings,
   RefreshCw,
   Trash2,
-  Crown
+  Crown,
+  Pencil,
+  Check,
+  X,
+  Upload,
+  Share2,
+  Copy,
+  Link2,
+  CheckCheck
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -28,11 +36,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { CreateProjectModal } from '@/components/CreateProjectModal'
-import { getProjects, deleteProject } from '@/lib/projects'
+import { getProjects, deleteProject, updateProject, createProject } from '@/lib/projects'
+import { saveProjectData, type ProjectData } from '@/lib/projectData'
 import DebugAuth from '@/components/DebugAuth'
 import ProjectCardSkeleton from '@/components/ProjectCardSkeleton'
 import { TrialWarningBanner } from '@/components/SubscriptionGate'
 import { useTrialStatus, getStatusMessage, getStatusColor } from '@/hooks/useTrialStatus'
+import { useUserPlan } from '@/hooks/useUserPlan'
 
 interface Project {
   id: string
@@ -54,12 +64,22 @@ export default function DashboardPage() {
   const [deletingProject, setDeletingProject] = useState<string | null>(null)
   const [confirmDeleteProject, setConfirmDeleteProject] = useState<Project | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [sharingProject, setSharingProject] = useState<Project | null>(null)
+  const [showShareDialog, setShowShareDialog] = useState(false)
+  const [shareUrl, setShareUrl] = useState('')
+  const [shareLoading, setShareLoading] = useState(false)
+  const [shareCopied, setShareCopied] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const cacheRef = useRef<{ data: Project[], timestamp: number } | null>(null)
   const CACHE_DURATION = 30000 // 30 segundos
   const router = useRouter()
 
   const { signOut, user, loading: authLoading } = useAuth()
   const trialStatus = useTrialStatus(user)
+  const userPlan = useUserPlan(user ?? null)
 
   const handleLogout = async () => {
     await signOut()
@@ -178,6 +198,172 @@ export default function DashboardPage() {
   const handleRefresh = () => {
     setHasInitialLoad(false) // Reset para permitir novo carregamento
     loadProjects(true)
+  }
+
+  const handleImportProject = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !user?.id) return
+
+    if (fileInputRef.current) fileInputRef.current.value = ''
+
+    if (projects.length >= userPlan.limits.maxProjects) {
+      setError(`Limite de ${userPlan.limits.maxProjects} projetos atingido. Faça upgrade para criar mais projetos.`)
+      return
+    }
+
+    setImporting(true)
+    setError('')
+
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text) as ProjectData
+
+      if (!data.elements || !Array.isArray(data.elements)) {
+        throw new Error('Arquivo JSON inválido: campo "elements" não encontrado')
+      }
+      if (!data.viewport || typeof data.viewport.x !== 'number') {
+        throw new Error('Arquivo JSON inválido: campo "viewport" não encontrado')
+      }
+
+      const projectName = file.name.replace(/\.json$/i, '').trim() || 'Projeto Importado'
+
+      const { data: newProject, error: createError } = await createProject(user.id, {
+        name: projectName,
+        description: 'Projeto importado de arquivo JSON'
+      })
+
+      if (createError || !newProject) {
+        const createErrorMessage = createError && typeof createError === 'object' && 'message' in createError
+          ? String(createError.message)
+          : 'erro desconhecido'
+        throw new Error('Erro ao criar projeto: ' + createErrorMessage)
+      }
+
+      const createdProjectId = (newProject as { id?: string }).id
+      if (!createdProjectId) {
+        throw new Error('Erro ao criar projeto: ID não retornado')
+      }
+
+      await saveProjectData(createdProjectId, {
+        elements: data.elements || [],
+        groups: data.groups || [],
+        viewport: data.viewport || { x: 0, y: 0, zoom: 1 },
+        scenes: data.scenes || [],
+        currentSceneIndex: data.currentSceneIndex ?? 0,
+        stageConfig: data.stageConfig ?? null,
+        lastModified: new Date().toISOString()
+      })
+
+      await loadProjects(true)
+    } catch (err) {
+      const message = err instanceof SyntaxError
+        ? 'Arquivo não é um JSON válido'
+        : err instanceof Error
+          ? err.message
+          : 'Erro ao importar projeto'
+      setError(message)
+    } finally {
+      setImporting(false)
+    }
+  }, [user?.id, projects.length, userPlan.limits.maxProjects, loadProjects])
+
+  const handleShareProject = async (project: Project) => {
+    setSharingProject(project)
+    setShowShareDialog(true)
+    setShareUrl('')
+    setShareLoading(true)
+    setShareCopied(false)
+    
+    try {
+      const res = await fetch('/api/projects/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id })
+      })
+      const data = await res.json()
+      if (res.ok && data.shareUrl) {
+        setShareUrl(data.shareUrl)
+      } else {
+        setError(data.error || 'Erro ao compartilhar projeto')
+        setShowShareDialog(false)
+      }
+    } catch {
+      setError('Erro ao compartilhar projeto')
+      setShowShareDialog(false)
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  const handleCopyShareLink = async () => {
+    if (!shareUrl) return
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea')
+      textArea.value = shareUrl
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textArea)
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    }
+  }
+
+  const handleRemoveShare = async () => {
+    if (!sharingProject) return
+    setShareLoading(true)
+    try {
+      const res = await fetch(`/api/projects/share?projectId=${sharingProject.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setShowShareDialog(false)
+        setSharingProject(null)
+        setShareUrl('')
+      }
+    } catch {
+      setError('Erro ao remover compartilhamento')
+    } finally {
+      setShareLoading(false)
+    }
+  }
+
+  // Função para salvar nome editado do projeto
+  const handleSaveProjectName = async (projectId: string) => {
+    const trimmed = editingName.trim()
+    if (!trimmed || !user?.id) {
+      setEditingProjectId(null)
+      setEditingName('')
+      return
+    }
+
+    try {
+      const { data, error } = await updateProject(projectId, user.id, { name: trimmed })
+      if (error) {
+        alert('Erro ao renomear projeto: ' + (typeof error === 'object' && error && 'message' in error ? error.message : 'Erro desconhecido'))
+        return
+      }
+
+      // Atualizar lista local
+      setProjects(prev => prev.map(p => p.id === projectId ? { ...p, name: trimmed } : p))
+
+      // Atualizar cache
+      if (cacheRef.current) {
+        cacheRef.current = {
+          data: cacheRef.current.data.map(p => p.id === projectId ? { ...p, name: trimmed } : p),
+          timestamp: Date.now()
+        }
+      }
+    } catch (err) {
+      console.error('Erro inesperado ao renomear projeto:', err)
+      alert('Erro inesperado ao renomear projeto')
+    } finally {
+      setEditingProjectId(null)
+      setEditingName('')
+    }
   }
 
   // Função para abrir confirmação de exclusão
@@ -403,12 +589,88 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportProject}
+            />
+
+            <Card
+              className="border-dashed border-muted hover:border-muted-foreground transition-colors cursor-pointer group h-64 flex items-center justify-center"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <CardContent className="flex flex-col items-center justify-center text-center p-6">
+                {importing ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin mb-4" />
+                    <CardTitle className="text-lg mb-2">Importando...</CardTitle>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4 group-hover:bg-muted-foreground group-hover:text-muted transition-colors">
+                      <Upload className="h-6 w-6" />
+                    </div>
+                    <CardTitle className="text-lg mb-2 group-hover:text-muted-foreground transition-colors">
+                      Importar Projeto
+                    </CardTitle>
+                    <CardDescription className="group-hover:text-muted-foreground transition-colors">
+                      Importar de arquivo .json
+                    </CardDescription>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Project Cards */}
             {filteredProjects.map((project) => (
               <Card key={project.id} className="hover:shadow-md transition-shadow h-64">
                 <CardContent className="p-6 h-full flex flex-col justify-between">
                   <div>
-                    <CardTitle className="text-lg mb-2">{project.name}</CardTitle>
+                    {editingProjectId === project.id ? (
+                      <div className="flex items-center gap-1 mb-2">
+                        <Input
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveProjectName(project.id)
+                            if (e.key === 'Escape') { setEditingProjectId(null); setEditingName('') }
+                          }}
+                          className="h-8 text-lg font-semibold"
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleSaveProjectName(project.id)}
+                        >
+                          <Check className="h-4 w-4 text-green-600" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => { setEditingProjectId(null); setEditingName('') }}
+                        >
+                          <X className="h-4 w-4 text-red-600" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 group/name mb-2">
+                        <CardTitle className="text-lg">{project.name}</CardTitle>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 opacity-0 group-hover/name:opacity-100 transition-opacity"
+                          onClick={() => { setEditingProjectId(project.id); setEditingName(project.name) }}
+                          title="Renomear projeto"
+                        >
+                          <Pencil className="h-3 w-3 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    )}
                     <CardDescription className="text-sm text-muted-foreground mb-4 line-clamp-3">
                       {project.description || 'Sem descrição'}
                     </CardDescription>
@@ -420,21 +682,31 @@ export default function DashboardPage() {
                       <span>{formatDate(project.created_at)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleDeleteProject(project)}
-                        disabled={deletingProject === project.id}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
-                        title="Excluir projeto"
-                      >
-                        {deletingProject === project.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                        {deletingProject === project.id ? 'Excluindo...' : 'Excluir'}
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          onClick={() => handleDeleteProject(project)}
+                          disabled={deletingProject === project.id}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 flex items-center gap-1"
+                          title="Excluir projeto"
+                        >
+                          {deletingProject === project.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleShareProject(project)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                          title="Compartilhar projeto"
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                       <Button 
                         variant="outline" 
                         size="sm"
@@ -497,6 +769,8 @@ export default function DashboardPage() {
         open={isCreateModalOpen}
         onOpenChange={setIsCreateModalOpen}
         onProjectCreated={handleProjectCreated}
+        currentProjectCount={projects.length}
+        maxProjects={userPlan.limits.maxProjects}
       />
 
       {/* Dialog de Confirmação de Exclusão */}
@@ -532,6 +806,68 @@ export default function DashboardPage() {
               ) : (
                 'Confirmar Exclusão'
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Compartilhamento */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="h-5 w-5" />
+              Compartilhar Projeto
+            </DialogTitle>
+            <DialogDescription>
+              {sharingProject ? `Compartilhe &quot;${sharingProject.name}&quot; com um link público de visualização.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {shareLoading && !shareUrl ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : shareUrl ? (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 flex items-center gap-2 bg-muted rounded-md px-3 py-2 text-sm">
+                  <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="truncate">{shareUrl}</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyShareLink}
+                  className="shrink-0"
+                >
+                  {shareCopied ? (
+                    <><CheckCheck className="h-4 w-4 mr-1 text-green-600" /> Copiado!</>
+                  ) : (
+                    <><Copy className="h-4 w-4 mr-1" /> Copiar</>
+                  )}
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Qualquer pessoa com este link poderá visualizar o projeto (somente leitura).
+              </p>
+            </div>
+          ) : null}
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            {shareUrl && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleRemoveShare}
+                disabled={shareLoading}
+                className="mr-auto"
+              >
+                Remover Compartilhamento
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setShowShareDialog(false)}>
+              Fechar
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -30,6 +30,7 @@ import { ActorModal } from './ActorModal'
 import { ObjectModal } from './ObjectModal'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
+import { useUserPlan } from '@/hooks/useUserPlan'
 import { useParams } from 'next/navigation'
 
 interface EditorTopToolbarProps {
@@ -50,6 +51,7 @@ export function EditorTopToolbar({
   onExcludeElements
 }: EditorTopToolbarProps) {
   const { user } = useAuth()
+  const userPlan = useUserPlan(user ?? null)
   const params = useParams()
   const projectId = params?.projectId as string
   
@@ -316,7 +318,7 @@ export function EditorTopToolbar({
           variant="ghost"
           size="sm"
           onClick={handleCopy}
-          title="Duplicar (Ctrl+D)"
+          title="Duplicar"
           className="h-8 w-8 p-0"
         >
           <Copy className="h-4 w-4" />
@@ -325,7 +327,7 @@ export function EditorTopToolbar({
           variant="ghost"
           size="sm"
           onClick={handleDelete}
-          title="Deletar (Delete)"
+          title="Deletar"
           className="h-8 w-8 p-0"
         >
           <Trash2 className="h-4 w-4" />
@@ -342,7 +344,7 @@ export function EditorTopToolbar({
               variant="ghost"
               size="sm"
               onClick={onUnionElements}
-              title="União (Shift+U)"
+              title="União"
               className="h-8 w-8 p-0"
             >
               <Plus className="h-4 w-4" />
@@ -351,7 +353,7 @@ export function EditorTopToolbar({
               variant="ghost"
               size="sm"
               onClick={onSubtractElements}
-              title="Subtração (Shift+S)"
+              title="Subtração"
               className="h-8 w-8 p-0"
             >
               <Scissors className="h-4 w-4" />
@@ -360,7 +362,7 @@ export function EditorTopToolbar({
               variant="ghost"
               size="sm"
               onClick={onIntersectElements}
-              title="Interseção (Shift+I)"
+              title="Interseção"
               className="h-8 w-8 p-0"
             >
               <Merge className="h-4 w-4" />
@@ -369,7 +371,7 @@ export function EditorTopToolbar({
               variant="ghost"
               size="sm"
               onClick={onExcludeElements}
-              title="Exclusão (Shift+E)"
+              title="Exclusão"
               className="h-8 w-8 p-0"
             >
               <XCircle className="h-4 w-4" />
@@ -389,7 +391,7 @@ export function EditorTopToolbar({
           size="sm"
           onClick={handleBringToFront}
           disabled={selectedElements.length === 0}
-          title="Trazer para Frente (Ctrl+Shift+])"
+          title="Trazer para Frente"
           className="h-8 w-8 p-0"
         >
           <ChevronsUp className="h-4 w-4" />
@@ -399,7 +401,7 @@ export function EditorTopToolbar({
           size="sm"
           onClick={handleBringForward}
           disabled={selectedElements.length === 0}
-          title="Subir uma Camada (Ctrl+])"
+          title="Subir uma Camada"
           className="h-8 w-8 p-0"
         >
           <ChevronUp className="h-4 w-4" />
@@ -409,7 +411,7 @@ export function EditorTopToolbar({
           size="sm"
           onClick={handleSendBackward}
           disabled={selectedElements.length === 0}
-          title="Descer uma Camada (Ctrl+[)"
+          title="Descer uma Camada"
           className="h-8 w-8 p-0"
         >
           <ChevronDown className="h-4 w-4" />
@@ -419,7 +421,7 @@ export function EditorTopToolbar({
           size="sm"
           onClick={handleSendToBack}
           disabled={selectedElements.length === 0}
-          title="Enviar para Trás (Ctrl+Shift+[)"
+          title="Enviar para Trás"
           className="h-8 w-8 p-0"
         >
           <ChevronsDown className="h-4 w-4" />
@@ -434,7 +436,7 @@ export function EditorTopToolbar({
           variant="ghost"
           size="sm"
           onClick={onSave}
-          title="Salvar (Ctrl+S)"
+          title="Salvar"
           className="h-8 w-8 p-0"
         >
           <Save className="h-4 w-4" />
@@ -507,7 +509,7 @@ export function EditorTopToolbar({
           className="px-2 md:px-3"
         >
           <User className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">Cadastrar Ator</span>
+          <span className="hidden sm:inline">Cadastrar Ator</span>
         </Button>
         <Button
           onClick={handleOpenObjectModal}
@@ -517,7 +519,7 @@ export function EditorTopToolbar({
           className="px-2 md:px-3"
         >
           <Box className="h-4 w-4 md:mr-2" />
-          <span className="hidden md:inline">Cadastrar Objeto</span>
+          <span className="hidden sm:inline">Cadastrar Objeto</span>
         </Button>
       </div>
 
@@ -528,6 +530,7 @@ export function EditorTopToolbar({
         onSave={handleActorModalSave}
         position={actorModalPosition}
         currentActorCount={actorCount}
+        planTier={userPlan.tier}
       />
 
       {/* Modal de criação de objeto */}
@@ -537,6 +540,7 @@ export function EditorTopToolbar({
         onSave={handleObjectModalSave}
         position={objectModalPosition}
         currentObjectCount={objectCount}
+        planTier={userPlan.tier}
       />
     </div>
   )

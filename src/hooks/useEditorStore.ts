@@ -154,6 +154,7 @@ interface EditorStore {
   isTransitioning: boolean
   isFullscreenSlideshow: boolean
   slideshowInterval: number
+  isNotesCollapsed: boolean
   slideshowTimer?: NodeJS.Timeout
 
   // Drawing state
@@ -237,8 +238,8 @@ interface EditorStore {
   reorderElements: (draggedElementId: string, targetElementId: string, position: 'above' | 'below') => void
 
   // Scene operations
-  addScene: (name?: string) => void
-  duplicateScene: (index: number) => void
+  addScene: (name?: string, maxScenes?: number) => void
+  duplicateScene: (index: number, maxScenes?: number) => void
   deleteScene: (index: number) => void
   loadScene: (index: number) => void
   updateSceneName: (index: number, name: string) => void
@@ -321,6 +322,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   isTransitioning: false,
   isFullscreenSlideshow: false,
   slideshowInterval: 3000, // 3 seconds default
+  isNotesCollapsed: true,
   slideshowTimer: undefined,
 
   isDrawing: false,
@@ -1092,12 +1094,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   // Scene operations
-  addScene: (name) => {
+  addScene: (name, maxScenes) => {
     const { elements, groups, viewport, stageConfig, scenes } = get()
     const hasStageDefined = Boolean(stageConfig) || groups.some(group => group.name === 'Palco')
 
     if (!hasStageDefined) {
       alert('Crie ou configure um palco antes de adicionar cenas. Assim garantimos que todas as cenas compartilhem a mesma base.')
+      return
+    }
+
+    // Check scene limit
+    if (maxScenes !== undefined && scenes.length >= maxScenes) {
+      alert(`Limite máximo de ${maxScenes} cenas por projeto atingido.`)
       return
     }
 
@@ -1117,9 +1125,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }))
   },
 
-  duplicateScene: (index) => {
+  duplicateScene: (index, maxScenes) => {
     const { scenes } = get()
     if (index < 0 || index >= scenes.length) return
+
+    // Check scene limit
+    if (maxScenes !== undefined && scenes.length >= maxScenes) {
+      alert(`Limite máximo de ${maxScenes} cenas por projeto atingido.`)
+      return
+    }
 
     const sceneToClone = scenes[index]
     const newScene: Scene = {

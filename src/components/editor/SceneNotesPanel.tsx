@@ -8,9 +8,13 @@ import { Button } from '@/components/ui/button'
 import { FileText, ChevronDown, ChevronUp } from 'lucide-react'
 
 export function SceneNotesPanel() {
-  const { scenes, currentSceneIndex, updateSceneNotes } = useEditorStore()
+  const { scenes, currentSceneIndex, updateSceneNotes, isNotesCollapsed } = useEditorStore()
   const [localNotes, setLocalNotes] = useState('')
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const isCollapsed = isNotesCollapsed
+  const setIsCollapsed = (val: boolean | ((prev: boolean) => boolean)) => {
+    const newVal = typeof val === 'function' ? val(isNotesCollapsed) : val
+    useEditorStore.setState({ isNotesCollapsed: newVal })
+  }
 
   const currentScene = currentSceneIndex >= 0 ? scenes[currentSceneIndex] : null
 

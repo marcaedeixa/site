@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Crown, Shield, Zap, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { STRIPE_PLANS, STRIPE_CONFIG, formatCurrency } from '@/lib/stripe'
+import { PLANS } from '@/lib/plan-config'
+import { formatCurrency } from '@/lib/stripe'
 import { cn } from '@/lib/utils'
 
 interface PricingSectionProps {
@@ -12,114 +13,115 @@ interface PricingSectionProps {
   userEmail?: string | null
   currentPlanId?: string | null
   onSelectPlan?: (priceId: string, planName: string) => void
-  showTrialOption?: boolean
   className?: string
   variant?: 'default' | 'compact'
 }
 
 type BillingInterval = 'monthly' | 'yearly'
+type StripePrice = { priceId: string; amount: number; interval: 'month' | 'year' }
+type StripePlan = {
+  name: string
+  description: string
+  features: string[]
+  prices: { monthly: StripePrice; yearly: StripePrice } | null
+}
 
 export default function PricingSection({
   userId,
-  userEmail,
   currentPlanId,
   onSelectPlan,
-  showTrialOption = true,
   className,
-  variant = 'default',
 }: PricingSectionProps) {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly')
   const [loading, setLoading] = useState<string | null>(null)
+  const [pricesLoading, setPricesLoading] = useState(true)
+  const [priceError, setPriceError] = useState<string | null>(null)
+  const [pricePlans, setPricePlans] = useState<Record<string, StripePlan> | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    let active = true
+    const loadPrices = async () => {
+      setPricesLoading(true)
+      setPriceError(null)
+      try {
+        const response = await fetch('/api/stripe/prices')
+        if (!response.ok) {
+          const data = await response.json().catch(() => null)
+          throw new Error(data?.error || 'Erro ao carregar preços')
+        }
+        const data = await response.json()
+        if (active) {
+          // Map response to our format
+          const mapped: Record<string, StripePlan> = {}
+          if (data.plans && Array.isArray(data.plans)) {
+            data.plans.forEach((plan: StripePlan) => {
+              mapped[plan.key] = plan
+            })
+          }
+          setPricePlans(mapped)
+        }
+      } catch (error) {
+        if (active) {
+          setPriceError(error instanceof Error ? error.message : 'Erro ao carregar preços')
+        }
+      } finally {
+        if (active) {
+          setPricesLoading(false)
+        }
+      }
+    }
+
+    loadPrices()
+    return () => {
+      active = false
+    }
+  }, [])
 
   const plans = [
     {
-      key: 'trial',
-      name: 'Teste Grátis',
-      description: `${STRIPE_CONFIG.trialDays} dias para experimentar`,
+      key: 'free',
+      name: PLANS.free.name,
+      description: PLANS.free.description,
       price: 0,
-      priceId: 'trial',
-      interval: 'trial',
-      features: [
-        'Acesso completo por 7 dias',
-        'Todos os recursos',
-        'Sem cartão de crédito',
-        'Cancele quando quiser',
-      ],
+      priceId: 'free',
+      interval: 'free' as const,
+      features: PLANS.free.features,
       icon: Zap,
       popular: false,
     },
     {
-      key: 'basic',
-      name: STRIPE_PLANS.basic.name,
-      description: STRIPE_PLANS.basic.description,
-      price: billingInterval === 'monthly' 
-        ? STRIPE_PLANS.basic.prices.monthly.amount 
-        : STRIPE_PLANS.basic.prices.yearly.amount,
-      priceId: billingInterval === 'monthly'
-        ? STRIPE_PLANS.basic.prices.monthly.priceId
-        : STRIPE_PLANS.basic.prices.yearly.priceId,
-      interval: billingInterval,
-      features: STRIPE_PLANS.basic.features,
-      icon: Shield,
-      popular: false,
-    },
-    {
-      key: 'premium',
-      name: STRIPE_PLANS.premium.name,
-      description: STRIPE_PLANS.premium.description,
+      key: 'pro',
+      name: PLANS.pro.name,
+      description: PLANS.pro.description,
       price: billingInterval === 'monthly'
-        ? STRIPE_PLANS.premium.prices.monthly.amount
-        : STRIPE_PLANS.premium.prices.yearly.amount,
+        ? (pricePlans?.pro?.prices?.monthly.amount ?? PLANS.pro.prices.monthly.amount)
+        : (pricePlans?.pro?.prices?.yearly.amount ?? PLANS.pro.prices.yearly.amount),
       priceId: billingInterval === 'monthly'
-        ? STRIPE_PLANS.premium.prices.monthly.priceId
-        : STRIPE_PLANS.premium.prices.yearly.priceId,
+        ? pricePlans?.pro?.prices?.monthly.priceId || ''
+        : pricePlans?.pro?.prices?.yearly.priceId || '',
       interval: billingInterval,
-      features: STRIPE_PLANS.premium.features,
+      features: PLANS.pro.features,
       icon: Crown,
       popular: true,
     },
   ]
-
-  const displayPlans = showTrialOption ? plans : plans.filter(p => p.key !== 'trial')
-
   const handleSelectPlan = async (plan: typeof plans[0]) => {
-    if (plan.key === 'trial') {
-      // Para trial, precisa estar logado
+    // Free plan: redirect to dashboard or register
+    if (plan.key === 'free') {
       if (!userId) {
-        router.push('/login?redirect=/plans')
-        return
-      }
-      
-      // Iniciar trial
-      setLoading('trial')
-      try {
-        const response = await fetch('/api/subscriptions/user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            plan_id: 'trial',
-            trial_days: STRIPE_CONFIG.trialDays 
-          }),
-        })
-        
-        if (response.ok) {
-          router.push('/dashboard?trial=started')
-        }
-      } catch (error) {
-        console.error('Erro ao iniciar trial:', error)
-      } finally {
-        setLoading(null)
+        router.push('/register')
+      } else {
+        router.push('/dashboard')
       }
       return
     }
 
-    // Para planos pagos, ir direto para checkout (cadastro durante o processo)
-    if (onSelectPlan) {
+    // Pro plan: redirect to checkout
+    if (onSelectPlan && plan.priceId) {
       onSelectPlan(plan.priceId, plan.name)
     } else {
-      // Inclui o intervalo na URL para manter a seleção
-      router.push(`/checkout?plan=${plan.key}&interval=${billingInterval}`)
+      router.push(`/checkout?plan=pro&interval=${billingInterval}`)
     }
   }
 
@@ -141,6 +143,11 @@ export default function PricingSection({
           <p className="text-xl text-gray-500 max-w-2xl mx-auto">
             Comece gratuitamente e faça upgrade quando precisar
           </p>
+          {priceError && (
+            <p className="text-sm text-red-500 mt-4">
+              Preços temporariamente indisponíveis. Tente novamente mais tarde.
+            </p>
+          )}
         </div>
 
         {/* Billing Toggle */}
@@ -187,28 +194,29 @@ export default function PricingSection({
         {/* Plans Grid */}
         <div className={cn(
           'grid gap-6',
-          displayPlans.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2 max-w-4xl mx-auto'
+          'md:grid-cols-2 max-w-4xl mx-auto'
         )}>
-          {displayPlans.map((plan) => {
+          {plans.map((plan) => {
             const Icon = plan.icon
             const isCurrentPlan = currentPlanId === plan.priceId
             const isLoading = loading === plan.key
-            const isTrial = plan.key === 'trial'
-            const isPremium = plan.key === 'premium'
+            const isFree = plan.key === 'free'
+            const isPro = plan.key === 'pro'
+            const isPriceUnavailable = !isFree && !pricesLoading && !!priceError
 
             return (
               <div
                 key={plan.key}
                 className={cn(
                   'relative rounded-3xl p-8 transition-all duration-300',
-                  isPremium 
-                    ? 'bg-black text-white ring-2 ring-black' 
+                  isPro
+                    ? 'bg-black text-white ring-2 ring-black'
                     : 'bg-white border-2 border-gray-100 hover:border-gray-300',
                   isCurrentPlan && 'ring-2 ring-gray-400'
                 )}
               >
                 {/* Popular Badge */}
-                {isPremium && (
+                {isPro && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2">
                     <span className="bg-white text-black text-xs font-bold px-4 py-1.5 rounded-full shadow-lg">
                       Mais Popular
@@ -229,20 +237,20 @@ export default function PricingSection({
                 <div className="mb-8">
                   <div className={cn(
                     'w-12 h-12 rounded-2xl flex items-center justify-center mb-4',
-                    isPremium ? 'bg-white/10' : 'bg-gray-100'
+                    isPro ? 'bg-white/10' : 'bg-gray-100'
                   )}>
-                    <Icon className={cn('w-6 h-6', isPremium ? 'text-white' : 'text-black')} />
+                    <Icon className={cn('w-6 h-6', isPro ? 'text-white' : 'text-black')} />
                   </div>
 
                   <h3 className={cn(
                     'text-xl font-bold mb-2',
-                    isPremium ? 'text-white' : 'text-black'
+                    isPro ? 'text-white' : 'text-black'
                   )}>
                     {plan.name}
                   </h3>
                   <p className={cn(
                     'text-sm',
-                    isPremium ? 'text-gray-400' : 'text-gray-500'
+                    isPro ? 'text-gray-400' : 'text-gray-500'
                   )}>
                     {plan.description}
                   </p>
@@ -250,68 +258,65 @@ export default function PricingSection({
 
                 {/* Price */}
                 <div className="mb-8">
-                  {isTrial ? (
+                  {isFree ? (
                     <div>
                       <span className={cn(
                         'text-5xl font-black',
-                        isPremium ? 'text-white' : 'text-black'
+                        isPro ? 'text-white' : 'text-black'
                       )}>
                         Grátis
                       </span>
                       <span className={cn(
                         'ml-2',
-                        isPremium ? 'text-gray-400' : 'text-gray-500'
+                        isPro ? 'text-gray-400' : 'text-gray-500'
                       )}>
-                        / {STRIPE_CONFIG.trialDays} dias
+                        / Sem limite de tempo
                       </span>
                     </div>
                   ) : (
                     <div>
                       <span className={cn(
                         'text-5xl font-black',
-                        isPremium ? 'text-white' : 'text-black'
+                        isPro ? 'text-white' : 'text-black'
                       )}>
                         {formatCurrency(plan.price, 'brl')}
                       </span>
                       <span className={cn(
                         'ml-2',
-                        isPremium ? 'text-gray-400' : 'text-gray-500'
+                        isPro ? 'text-gray-400' : 'text-gray-500'
                       )}>
                         /{billingInterval === 'monthly' ? 'mês' : 'ano'}
                       </span>
-                      {billingInterval === 'yearly' && !isTrial && (
+                      {billingInterval === 'yearly' && !isFree && (
                         <p className={cn(
                           'text-sm mt-2',
-                          isPremium ? 'text-green-400' : 'text-green-600'
+                          isPro ? 'text-green-400' : 'text-green-600'
                         )}>
                           Economia de {yearlyDiscount(
-                            plan.key === 'basic' 
-                              ? STRIPE_PLANS.basic.prices.monthly.amount 
-                              : STRIPE_PLANS.premium.prices.monthly.amount,
-                            plan.price
+                            PLANS.pro.prices.monthly.amount,
+                            PLANS.pro.prices.yearly.amount
                           )}%
                         </p>
                       )}
                     </div>
                   )}
                 </div>
-
                 {/* Features */}
                 <ul className="space-y-4 mb-8">
                   {plan.features.map((feature, index) => (
                     <li key={index} className="flex items-start gap-3">
                       <div className={cn(
                         'w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5',
-                        isPremium ? 'bg-white/10' : 'bg-gray-100'
+                        isPro ? 'bg-white/10' : 'bg-gray-100'
                       )}>
                         <Check className={cn(
                           'w-3 h-3',
-                          isPremium ? 'text-white' : 'text-black'
+                          isPro ? 'text-white' : 'text-black'
                         )} />
                       </div>
                       <span className={cn(
                         'text-sm',
-                        isPremium ? 'text-gray-300' : 'text-gray-600'
+                        isPro ? 'text-gray-300' : 'text-gray-600'
                       )}>
                         {feature}
                       </span>
@@ -322,13 +327,13 @@ export default function PricingSection({
                 {/* CTA Button */}
                 <Button
                   onClick={() => handleSelectPlan(plan)}
-                  disabled={isCurrentPlan || isLoading}
+                  disabled={isCurrentPlan || isLoading || isPriceUnavailable}
                   className={cn(
                     'w-full py-6 rounded-full font-semibold transition-all group',
-                    isPremium 
-                      ? 'bg-white text-black hover:bg-gray-100' 
+                    isPro
+                      ? 'bg-white text-black hover:bg-gray-100'
                       : 'bg-black text-white hover:bg-gray-800',
-                    isCurrentPlan && 'opacity-50 cursor-not-allowed'
+                    (isCurrentPlan || isPriceUnavailable) && 'opacity-50 cursor-not-allowed'
                   )}
                 >
                   {isLoading ? (
@@ -338,7 +343,7 @@ export default function PricingSection({
                     </>
                   ) : isCurrentPlan ? (
                     'Plano Atual'
-                  ) : isTrial ? (
+                  ) : isFree ? (
                     <>
                       Começar Grátis
                       <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
@@ -351,11 +356,11 @@ export default function PricingSection({
                   )}
                 </Button>
 
-                {/* Trial Note */}
-                {isTrial && (
+                {/* Free Plan Note */}
+                {isFree && (
                   <p className={cn(
                     'text-xs text-center mt-4',
-                    isPremium ? 'text-gray-500' : 'text-gray-400'
+                    isPro ? 'text-gray-500' : 'text-gray-400'
                   )}>
                     Sem cartão de crédito necessário
                   </p>

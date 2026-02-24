@@ -1,5 +1,7 @@
 import Stripe from 'stripe';
 import { loadStripe } from '@stripe/stripe-js';
+import type { Stripe as StripeJs } from '@stripe/stripe-js';
+import { PLANS } from '@/lib/plan-config';
 
 // Server-side Stripe instance (lazy initialization)
 let _stripe: Stripe | null = null;
@@ -16,7 +18,7 @@ export const getServerStripe = (): Stripe => {
     }
 
     _stripe = new Stripe(secretKey, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2024-06-20',
       typescript: true,
     });
   }
@@ -27,7 +29,7 @@ export const getServerStripe = (): Stripe => {
 // Use getServerStripe() function instead of direct stripe export to avoid client-side initialization
 
 // Client-side Stripe instance (optional)
-let stripePromise: Promise<Stripe | null> | null = null;
+let stripePromise: Promise<StripeJs | null> | null = null;
 
 export const getStripe = () => {
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -48,54 +50,55 @@ export const STRIPE_CONFIG = {
   successUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/subscription/success`,
   cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/plans`,
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
-  trialDays: 7, // Período de teste gratuito
+  trialDays: 0, // Sem trial — plano gratuito é permanente
 } as const;
 
-// Stripe product and price configurations
+// Stripe product and price configurations — alinhados com plan-config.ts
 export const STRIPE_PLANS = {
-  basic: {
-    name: 'Plano Básico',
-    description: 'Ideal para começar a organizar suas marcações',
-    features: [
-      'Até 10 projetos',
-      'Editor completo',
-      'Exportação básica',
-      'Suporte por email',
-    ],
+  // Plano Pro (único plano pago)
+  pro: {
+    name: PLANS.pro.name,
+    description: PLANS.pro.description,
+    features: PLANS.pro.features,
     prices: {
       monthly: {
-        amount: 2990, // R$ 29,90 em centavos
+        amount: PLANS.pro.prices!.monthly.amount, // R$ 5,00 em centavos
         interval: 'month' as const,
-        priceId: 'price_1SLHGERZnrK82RAyBnFueMkV',
       },
       yearly: {
-        amount: 45099, // R$ 450,99 em centavos
+        amount: PLANS.pro.prices!.yearly.amount, // R$ 50,00 em centavos
         interval: 'year' as const,
-        priceId: 'price_1SLGe1RZnrK82RAy4pnPa7aH',
+      },
+    },
+  },
+  // Aliases para compatibilidade (mapeiam para pro)
+  basic: {
+    name: PLANS.pro.name,
+    description: PLANS.pro.description,
+    features: PLANS.pro.features,
+    prices: {
+      monthly: {
+        amount: PLANS.pro.prices!.monthly.amount,
+        interval: 'month' as const,
+      },
+      yearly: {
+        amount: PLANS.pro.prices!.yearly.amount,
+        interval: 'year' as const,
       },
     },
   },
   premium: {
-    name: 'Plano Premium',
-    description: 'Acesso completo a todas as funcionalidades',
-    features: [
-      'Projetos ilimitados',
-      'Editor avançado',
-      'Exportação em alta qualidade',
-      'Suporte prioritário',
-      'Templates exclusivos',
-      'Colaboração em equipe',
-    ],
+    name: PLANS.pro.name,
+    description: PLANS.pro.description,
+    features: PLANS.pro.features,
     prices: {
       monthly: {
-        amount: 5990, // R$ 59,90 em centavos
+        amount: PLANS.pro.prices!.monthly.amount,
         interval: 'month' as const,
-        priceId: 'price_1SLHGFRZnrK82RAyJ9eyQbwO',
       },
       yearly: {
-        amount: 59900, // R$ 599,00 em centavos
+        amount: PLANS.pro.prices!.yearly.amount,
         interval: 'year' as const,
-        priceId: 'price_1SLHGGRZnrK82RAyRidf20Su',
       },
     },
   },
@@ -109,21 +112,33 @@ export const formatCurrency = (amount: number, currency: string = 'usd'): string
   }).format(amount / 100);
 };
 
-// Helper function to get plan by price ID
-export const getPlanByPriceId = (priceId: string) => {
-  for (const [planKey, plan] of Object.entries(STRIPE_PLANS)) {
-    for (const [intervalKey, price] of Object.entries(plan.prices)) {
-      if (price.priceId === priceId) {
-        return {
-          planKey,
-          intervalKey,
-          plan,
-          price,
-        };
-      }
-    }
-  }
+const mapPlanKeyFromName = (name?: string | null) => {
+  if (!name) return null;
+  const normalized = name.toLowerCase();
+  if (normalized.includes('pro') || normalized.includes('básico') || normalized.includes('basic') || normalized.includes('premium')) return 'pro';
   return null;
+};
+
+export const getPlanByPriceId = async (priceId: string) => {
+  if (!priceId) return null;
+  try {
+    const stripe = getServerStripe();
+    const price = await stripe.prices.retrieve(priceId, { expand: ['product'] });
+    const product = price.product && typeof price.product !== 'string' ? price.product : null;
+    const productName = product && !('deleted' in product) ? product.name : null;
+    const planKey = mapPlanKeyFromName(productName);
+    const plan = planKey ? STRIPE_PLANS[planKey] : null;
+
+    return {
+      planKey,
+      plan,
+      price,
+      productName,
+    };
+  } catch (error) {
+    console.error('Error resolving plan by price ID:', error);
+    return null;
+  }
 };
 
 // Stripe webhook event types we handle

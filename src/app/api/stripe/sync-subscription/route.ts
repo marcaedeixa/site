@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import type Stripe from 'stripe'
 import { getServerStripe, getPlanByPriceId } from '@/lib/stripe'
 import { createClient } from '@supabase/supabase-js'
 
@@ -85,9 +86,10 @@ export async function POST(request: NextRequest) {
 
     for (const subscription of subscriptions.data) {
       try {
+        const subscriptionData = subscription as unknown as SubscriptionWithPeriods
         const priceId = subscription.items.data[0]?.price?.id
-        const planInfo = getPlanByPriceId(priceId)
-        const planName = planInfo?.plan?.name || subscription.items.data[0]?.price?.nickname || 'Unknown Plan'
+        const planInfo = await getPlanByPriceId(priceId)
+        const planName = planInfo?.plan?.name || planInfo?.productName || subscription.items.data[0]?.price?.nickname || 'Unknown Plan'
 
         // Upsert subscription to database
         const { error } = await supabase
@@ -99,12 +101,12 @@ export async function POST(request: NextRequest) {
             status: subscription.status,
             plan_id: priceId,
             plan_name: planName,
-            current_period_start: new Date(subscription.current_period_start * 1000),
-            current_period_end: new Date(subscription.current_period_end * 1000),
+            current_period_start: new Date(subscriptionData.current_period_start * 1000),
+            current_period_end: new Date(subscriptionData.current_period_end * 1000),
             cancel_at_period_end: subscription.cancel_at_period_end,
             canceled_at: subscription.canceled_at ? new Date(subscription.canceled_at * 1000) : null,
-            trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
-            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+            trial_start: subscriptionData.trial_start ? new Date(subscriptionData.trial_start * 1000) : null,
+            trial_end: subscriptionData.trial_end ? new Date(subscriptionData.trial_end * 1000) : null,
           }, {
             onConflict: 'stripe_subscription_id'
           })
@@ -146,4 +148,9 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
+type SubscriptionWithPeriods = Stripe.Subscription & {
+  current_period_start: number
+  current_period_end: number
+  trial_start?: number | null
+  trial_end?: number | null
+}

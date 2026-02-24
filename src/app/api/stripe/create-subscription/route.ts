@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerStripe, STRIPE_CONFIG, getPlanByPriceId } from '@/lib/stripe'
-import { createOrRetrieveStripeCustomer, saveSubscriptionToDatabase } from '@/lib/stripe-config'
-import { createClient } from '@supabase/supabase-js'
+import type Stripe from 'stripe'
 
-// Get supabase client with service role
-function getSupabase() {
-  return createClient(
+type SubscriptionWithPeriods = Stripe.Subscription & {
+  current_period_start: number
+  current_period_end: number
+  trial_start?: number | null
+  trial_end?: number | null
+}
+import { getServerStripe, STRIPE_CONFIG, getPlanByPriceId } from '@/lib/stripe'
+import { createOrRetrieveStripeCustomer } from '@/lib/stripe-config'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
+
+// Service role client for DB operations
+function getServiceSupabase() {
+  return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
@@ -13,12 +21,42 @@ function getSupabase() {
 
 export async function POST(request: NextRequest) {
   try {
+    // Extract auth token from Authorization header
+    const authHeader = request.headers.get('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+    
+    if (!token) {
+      return NextResponse.json(
+        { error: 'Autenticação requerida' },
+        { status: 401 }
+      )
+    }
+    
+    // Verify user with service role client + token
+    const serviceSupabase = getServiceSupabase()
+    const { data: { user }, error: authError } = await serviceSupabase.auth.getUser(token)
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: 'Token inválido ou expirado' },
+        { status: 401 }
+      )
+    }
+
     const { priceId, userId, email, name } = await request.json()
 
     if (!priceId || !userId || !email) {
       return NextResponse.json(
         { error: 'Dados incompletos: priceId, userId e email são obrigatórios' },
         { status: 400 }
+      )
+    }
+
+    // Security: Validate that userId in body matches authenticated user
+    if (userId !== user.id) {
+      return NextResponse.json(
+        { error: 'Usuário não autorizado' },
+        { status: 403 }
       )
     }
 
@@ -55,6 +93,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Generate idempotency key to prevent duplicate subscriptions
+    const idempotencyKey = `sub_create_${userId}_${priceId}_${Date.now()}`
+
     // Create the subscription with trial period
     const subscription = await stripe.subscriptions.create({
       customer: customerId,
@@ -72,11 +113,14 @@ export async function POST(request: NextRequest) {
       ...(STRIPE_CONFIG.trialDays && STRIPE_CONFIG.trialDays > 0 ? {
         trial_period_days: STRIPE_CONFIG.trialDays,
       } : {}),
+    }, {
+      idempotencyKey,
     })
 
+    const subscriptionData = subscription as unknown as SubscriptionWithPeriods
+
     // Get the customer's internal ID from stripe_customers table
-    const supabase = getSupabase()
-    const { data: stripeCustomer } = await supabase
+    const { data: stripeCustomer } = await serviceSupabase
       .from('stripe_customers')
       .select('id')
       .eq('stripe_customer_id', customerId)
@@ -84,11 +128,11 @@ export async function POST(request: NextRequest) {
 
     // Save subscription to database immediately (don't wait for webhook)
     if (stripeCustomer) {
-      const planInfo = getPlanByPriceId(priceId)
-      const planName = planInfo?.plan?.name || 'Unknown Plan'
+      const planInfo = await getPlanByPriceId(priceId)
+      const planName = planInfo?.plan?.name || planInfo?.productName || 'Unknown Plan'
       
       try {
-        await supabase
+        await serviceSupabase
           .from('stripe_subscriptions')
           .upsert({
             customer_id: stripeCustomer.id,
@@ -97,11 +141,11 @@ export async function POST(request: NextRequest) {
             status: subscription.status,
             plan_id: priceId,
             plan_name: planName,
-            current_period_start: new Date(subscription.current_period_start * 1000),
-            current_period_end: new Date(subscription.current_period_end * 1000),
+            current_period_start: new Date(subscriptionData.current_period_start * 1000),
+            current_period_end: new Date(subscriptionData.current_period_end * 1000),
             cancel_at_period_end: subscription.cancel_at_period_end,
-            trial_start: subscription.trial_start ? new Date(subscription.trial_start * 1000) : null,
-            trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
+            trial_start: subscriptionData.trial_start ? new Date(subscriptionData.trial_start * 1000) : null,
+            trial_end: subscriptionData.trial_end ? new Date(subscriptionData.trial_end * 1000) : null,
           }, {
             onConflict: 'stripe_subscription_id'
           })
@@ -163,4 +207,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-

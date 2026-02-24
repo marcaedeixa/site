@@ -4,7 +4,8 @@ import {
   getCustomerSubscriptions,
   cancelSubscription,
   updateSubscription,
-  getUserActiveSubscription
+  getUserActiveSubscription,
+  saveSubscriptionToDatabase
 } from '@/lib/stripe-config';
 import { createClient } from '@/lib/supabase/server';
 
@@ -23,26 +24,53 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient(true); // Use service role
     
-    // Get user's active subscription from database
-    const activeSubscription = await getUserActiveSubscription(userId);
-
     // Get customer from database
     const { data: customer } = await supabase
       .from('stripe_customers')
-      .select('stripe_customer_id')
+      .select('id, stripe_customer_id')
       .eq('user_id', userId)
       .single();
 
-    let stripeSubscriptions = [];
+    // Get user's active subscription from database
+    let activeSubscription = await getUserActiveSubscription(userId);
+
+    // If no active subscription in DB, sync from Stripe (handles post-payment updates)
+    if (!activeSubscription && customer) {
+      const stripeSubscriptions = await getCustomerSubscriptions(customer.stripe_customer_id);
+      const activeSub = stripeSubscriptions.find(s => s.status === 'active' || s.status === 'trialing');
+      if (activeSub) {
+        // Sync active subscription back to database
+        try {
+          const subData = activeSub as any;
+          await saveSubscriptionToDatabase(
+            {
+              id: activeSub.id,
+              customer: activeSub.customer as string,
+              status: activeSub.status,
+              items: activeSub.items as any,
+              current_period_start: subData.current_period_start ?? Math.floor(Date.now() / 1000),
+              current_period_end: subData.current_period_end ?? Math.floor(Date.now() / 1000),
+              cancel_at_period_end: activeSub.cancel_at_period_end,
+            },
+            customer.id
+          );
+          // Re-fetch from DB to get consistent data
+          activeSubscription = await getUserActiveSubscription(userId);
+        } catch (syncErr) {
+          console.error('Error syncing subscription from Stripe:', syncErr);
+        }
+      }
+    }
+
+    let allSubscriptions: any[] = [];
     if (customer) {
-      // Get all subscriptions from Stripe
-      stripeSubscriptions = await getCustomerSubscriptions(customer.stripe_customer_id);
+      allSubscriptions = await getCustomerSubscriptions(customer.stripe_customer_id);
     }
 
     return NextResponse.json({
       success: true,
       activeSubscription,
-      allSubscriptions: stripeSubscriptions
+      allSubscriptions
     });
 
   } catch (error) {

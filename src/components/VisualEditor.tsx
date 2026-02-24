@@ -192,7 +192,7 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
       const result = await uniteMultipleShapes(shapeElements)
 
       if (result.success && result.svgPath) {
-        const referenceElement = shapeElements[0]
+        const referenceElement = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))[0]
         const idsToRemove = shapeElements.map(el => el.id)
 
         // Use batch to create single history entry
@@ -224,13 +224,14 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
   const handleSubtractElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
-    if (shapeElements.length < 2) {
-      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+    if (shapeElements.length !== 2) {
+      alert('Selecione exatamente duas formas geométricas para esta operação.')
       return
     }
 
     try {
-      const [first, second] = shapeElements
+      const sorted = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+      const [first, second] = sorted
       const shape1 = convertElementToShape(first)
       const shape2 = convertElementToShape(second)
 
@@ -271,13 +272,14 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
   const handleIntersectElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
-    if (shapeElements.length < 2) {
-      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+    if (shapeElements.length !== 2) {
+      alert('Selecione exatamente duas formas geométricas para esta operação.')
       return
     }
 
     try {
-      const [first, second] = shapeElements
+      const sorted = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+      const [first, second] = sorted
       const shape1 = convertElementToShape(first)
       const shape2 = convertElementToShape(second)
 
@@ -318,13 +320,14 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
   const handleExcludeElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
-    if (shapeElements.length < 2) {
-      alert('Selecione pelo menos duas formas geométricas (retângulo, círculo ou forma combinada) para usar as operações booleanas.')
+    if (shapeElements.length !== 2) {
+      alert('Selecione exatamente duas formas geométricas para esta operação.')
       return
     }
 
     try {
-      const [first, second] = shapeElements
+      const sorted = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+      const [first, second] = sorted
       const shape1 = convertElementToShape(first)
       const shape2 = convertElementToShape(second)
 
@@ -366,10 +369,11 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
   // Helper function to check if user is typing
   const isTyping = useCallback(() => {
     const activeElement = document.activeElement
+    const isContentEditableElement = activeElement instanceof HTMLElement && activeElement.isContentEditable
     return activeElement && (
       activeElement.tagName === 'INPUT' ||
       activeElement.tagName === 'TEXTAREA' ||
-      activeElement.contentEditable === 'true' ||
+      isContentEditableElement ||
       activeElement.getAttribute('contenteditable') === 'true'
     )
   }, [])

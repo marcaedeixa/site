@@ -39,6 +39,8 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const [editingHeight, setEditingHeight] = useState<string>('')
   const [isEditingWidth, setIsEditingWidth] = useState(false)
   const [isEditingHeight, setIsEditingHeight] = useState(false)
+  const [actorColorInput, setActorColorInput] = useState('#3b82f6')
+  const [isEditingActorColor, setIsEditingActorColor] = useState(false)
   const [draggedElement, setDraggedElement] = useState<string | null>(null)
 
   const sanitizeInitials = (value: string) =>
@@ -69,7 +71,6 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     setOpacity,
     setFontSize,
     createStage,
-    combineShapesIntoStage,
     lockGroup,
     unlockGroup,
     isElementLocked,
@@ -93,6 +94,40 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
   const selectedElement = selectedElements.length === 1
     ? elements.find(el => el.id === selectedElements[0])
     : null
+
+  useEffect(() => {
+    if (!isEditingActorColor) {
+      setActorColorInput(selectedElement?.actorColor || '#3b82f6')
+    }
+  }, [selectedElement?.actorColor, isEditingActorColor])
+
+  const normalizeHexColor = (value: string): string | null => {
+    const raw = value.trim()
+    if (!raw) return null
+
+    const withoutHash = raw.startsWith('#') ? raw.slice(1) : raw
+    if (!/^[a-fA-F0-9]{3}([a-fA-F0-9]{3})?$/.test(withoutHash)) {
+      return null
+    }
+
+    return `#${withoutHash}`
+  }
+
+  const commitActorColorInput = () => {
+    setIsEditingActorColor(false)
+
+    const normalizedColor = normalizeHexColor(actorColorInput)
+    if (!normalizedColor) {
+      setActorColorInput(selectedElement?.actorColor || '#3b82f6')
+      return
+    }
+
+    if (selectedElement?.type === 'actor' && normalizedColor !== (selectedElement.actorColor || '#3b82f6')) {
+      handleActorPropertyChange('actorColor', normalizedColor)
+    }
+
+    setActorColorInput(normalizedColor)
+  }
 
   const handleColorChange = (property: 'stroke' | 'fill', color: string) => {
     if (property === 'stroke') {
@@ -251,26 +286,26 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     })
   }
 
-  // Convert cm to meters for display
-  const cmToMeters = (cm: number) => (cm / 100).toFixed(2)
+  // Display values directly in cm (internal storage unit)
+  const formatCm = (cm: number) => cm.toFixed(1)
 
   const handleDimensionFocus = (property: 'width' | 'height') => {
     const element = elements.find(el => el.id === selectedElements[0])
     if (element) {
-      const valueInMeters = cmToMeters(element[property] || 0)
+      const displayValue = formatCm(element[property] || 0)
       if (property === 'width') {
         setIsEditingWidth(true)
-        setEditingWidth(valueInMeters)
+        setEditingWidth(displayValue)
         if (dimensionLocked) {
           setIsEditingHeight(true)
-          setEditingHeight(valueInMeters)
+          setEditingHeight(displayValue)
         }
       } else {
         setIsEditingHeight(true)
-        setEditingHeight(valueInMeters)
+        setEditingHeight(displayValue)
         if (dimensionLocked) {
           setIsEditingWidth(true)
-          setEditingWidth(valueInMeters)
+          setEditingWidth(displayValue)
         }
       }
     }
@@ -305,8 +340,8 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
     const numValue = parseFloat(value)
     if (isNaN(numValue) || numValue < 0) return
 
-    // Convert from meters (UI) to centimeters (internal storage)
-    const cmValue = numValue * 100
+    // Value is already in cm (internal storage unit)
+    const cmValue = numValue
 
     selectedElements.forEach(id => {
       if (dimensionLocked) {
@@ -519,7 +554,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                     {selectedElement && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <Label className="text-xs">Localização horizontal (m)</Label>
+                          <Label className="text-xs">Localização horizontal (cm)</Label>
                           <Input
                             type="number"
                             value={selectedElement.x}
@@ -528,7 +563,7 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                           />
                         </div>
                         <div>
-                          <Label className="text-xs">Localização vertical (m)</Label>
+                          <Label className="text-xs">Localização vertical (cm)</Label>
                           <Input
                             type="number"
                             value={selectedElement.y}
@@ -556,11 +591,11 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <Label className="text-xs">Largura (m)</Label>
+                            <Label className="text-xs">Largura (cm)</Label>
                             <Input
                               type="number"
                               step="0.01"
-                              value={isEditingWidth ? editingWidth : cmToMeters(selectedElement.width || 0)}
+                              value={isEditingWidth ? editingWidth : formatCm(selectedElement.width || 0)}
                               onFocus={() => handleDimensionFocus('width')}
                               onChange={(e) => handleDimensionChange('width', e.target.value)}
                               onBlur={() => handleDimensionBlur('width')}
@@ -568,11 +603,11 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                             />
                           </div>
                           <div>
-                            <Label className="text-xs">Altura (m)</Label>
+                            <Label className="text-xs">Altura (cm)</Label>
                             <Input
                               type="number"
                               step="0.01"
-                              value={isEditingHeight ? editingHeight : cmToMeters(selectedElement.height || 0)}
+                              value={isEditingHeight ? editingHeight : formatCm(selectedElement.height || 0)}
                               onFocus={() => handleDimensionFocus('height')}
                               onChange={(e) => handleDimensionChange('height', e.target.value)}
                               onBlur={() => handleDimensionBlur('height')}
@@ -640,8 +675,21 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                               className="h-8 w-12 cursor-pointer rounded border"
                             />
                             <Input
-                              value={selectedElement.actorColor || '#3b82f6'}
-                              onChange={(e) => handleActorPropertyChange('actorColor', e.target.value)}
+                              value={actorColorInput}
+                              onChange={(e) => setActorColorInput(e.target.value)}
+                              onFocus={() => setIsEditingActorColor(true)}
+                              onBlur={commitActorColorInput}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur()
+                                }
+
+                                if (e.key === 'Escape') {
+                                  setIsEditingActorColor(false)
+                                  setActorColorInput(selectedElement.actorColor || '#3b82f6')
+                                  e.currentTarget.blur()
+                                }
+                              }}
                               className="h-8 flex-1 font-mono text-xs"
                               placeholder="#3b82f6"
                             />

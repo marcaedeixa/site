@@ -25,6 +25,7 @@ DATABASE_URL=your-database-connection-string
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=your-stripe-publishable-key
 STRIPE_SECRET_KEY=your-stripe-secret-key
 STRIPE_WEBHOOK_SECRET=your-stripe-webhook-secret
+STRIPE_MODE=test
 
 # App Configuration
 NEXT_PUBLIC_APP_URL=http://localhost:3000

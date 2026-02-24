@@ -11,6 +11,7 @@ import { Element } from '@/hooks/useEditorStore'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useParams } from 'next/navigation'
+import { getLimitsForTier, getLimitReachedMessage, type PlanTier } from '@/lib/plan-config'
 
 interface ActorModalProps {
   isOpen: boolean
@@ -19,6 +20,7 @@ interface ActorModalProps {
   position: { x: number; y: number }
   initialData?: Partial<Element>
   currentActorCount: number
+  planTier?: PlanTier
 }
 
 const ACTOR_COLORS = [
@@ -32,7 +34,7 @@ const ACTOR_COLORS = [
   { value: '#6B7280', label: 'Cinza' },
 ]
 
-export function ActorModal({ isOpen, onClose, onSave, position, initialData, currentActorCount }: ActorModalProps) {
+export function ActorModal({ isOpen, onClose, onSave, position, initialData, currentActorCount, planTier }: ActorModalProps) {
   const { user } = useAuth()
   const params = useParams()
   const projectId = params.projectId as string
@@ -85,8 +87,9 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
     if (!validateForm() || !user || !projectId) return
 
     // Check actor limit
-    if (currentActorCount >= 30) {
-      setErrors({ actorName: 'Limite máximo de 30 atores por projeto atingido' })
+    const limits = getLimitsForTier(planTier)
+    if (currentActorCount >= limits.maxActorsPerProject) {
+      setErrors({ actorName: getLimitReachedMessage('maxActorsPerProject', planTier) })
       return
     }
 
@@ -226,7 +229,7 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         <DialogHeader>
           <DialogTitle>Criar Novo Ator</DialogTitle>
           <p className="text-sm text-gray-600">
-            Atores: {currentActorCount}/30
+            Atores: {currentActorCount}/{getLimitsForTier(planTier).maxActorsPerProject}
           </p>
         </DialogHeader>
         

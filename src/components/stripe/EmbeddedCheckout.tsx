@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, CheckCircle, AlertTriangle, Lock, CreditCard, Gift } from 'lucide-react'
-import { STRIPE_PLANS, formatCurrency } from '@/lib/stripe'
+import { formatCurrency } from '@/lib/stripe'
+import { createClient } from '@/lib/supabase/client'
 
 // Initialize Stripe
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
@@ -125,29 +126,25 @@ interface EmbeddedCheckoutProps {
   userId: string
   userEmail: string
   userName?: string
+  planName: string
+  amount: number
+  interval: 'month' | 'year'
 }
 
-export default function EmbeddedCheckout({ priceId, userId, userEmail, userName }: EmbeddedCheckoutProps) {
+export default function EmbeddedCheckout({
+  priceId,
+  userId,
+  userEmail,
+  userName,
+  planName,
+  amount,
+  interval,
+}: EmbeddedCheckoutProps) {
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
   const [isTrialing, setIsTrialing] = useState(false)
-
-  // Get plan details from price ID
-  const getPlanDetails = () => {
-    for (const [key, plan] of Object.entries(STRIPE_PLANS)) {
-      if (plan.prices.monthly.priceId === priceId) {
-        return { ...plan, interval: 'month', amount: plan.prices.monthly.amount }
-      }
-      if (plan.prices.yearly.priceId === priceId) {
-        return { ...plan, interval: 'year', amount: plan.prices.yearly.amount }
-      }
-    }
-    return null
-  }
-
-  const planDetails = getPlanDetails()
 
   useEffect(() => {
     // Create subscription/payment intent
@@ -157,9 +154,17 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
         setError(null)
         setIsTrialing(false)
 
+        // Get access token from client session for API auth
+        const supabase = createClient()
+        const { data: { session } } = await supabase.auth.getSession()
+        const accessToken = session?.access_token
+
         const response = await fetch('/api/stripe/create-subscription', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+          },
           body: JSON.stringify({
             priceId,
             userId,
@@ -254,7 +259,7 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
     )
   }
 
-  if (!clientSecret || !planDetails) {
+  if (!clientSecret || !planName || !amount) {
     return (
       <Card className="max-w-lg mx-auto">
         <CardContent className="py-8">
@@ -299,16 +304,15 @@ export default function EmbeddedCheckout({ priceId, userId, userEmail, userName 
           }}
         >
           <CheckoutForm
-            priceId={priceId}
-            planName={planDetails.name}
-            amount={planDetails.amount}
-            interval={planDetails.interval}
-            onSuccess={() => setSuccess(true)}
-            onError={(err) => setError(err)}
-          />
+              priceId={priceId}
+              planName={planName}
+              amount={amount}
+              interval={interval}
+              onSuccess={() => setSuccess(true)}
+              onError={(err) => setError(err)}
+            />
         </Elements>
       </CardContent>
     </Card>
   )
 }
-

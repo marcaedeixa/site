@@ -4,6 +4,8 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState, useCallba
 import { Element, Point, Tool, Viewport, useEditorStore } from '@/hooks/useEditorStore'
 import { ActorModal } from './ActorModal'
 import { FullscreenSlideshow } from './FullscreenSlideshow'
+import { useAuth } from '@/hooks/useAuth'
+import { useUserPlan } from '@/hooks/useUserPlan'
 
 import { createUnifiedStageSync, extractPathData } from '@/lib/svgUtils'
 import { TOUCH_DROP_EVENT, TouchDropDetail, TouchDropPayload } from '@/hooks/useTouchCanvasDrop'
@@ -84,6 +86,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   ref
 ) => {
 
+  const { user } = useAuth()
+  const userPlan = useUserPlan(user ?? null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [currentElement, setCurrentElement] = useState<Partial<Element> | null>(null)
@@ -1000,45 +1004,52 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     // Get dragged elements with their current positions
     const draggedElements = elements.filter(el => draggedElementIds.includes(el.id))
 
+    // Normalize bounds for any element, handling negative width/height (lines drawn right-to-left)
+    const getAlignBounds = (el: Element, pos?: { x: number; y: number }) => {
+      const x = pos?.x ?? el.x
+      const y = pos?.y ?? el.y
+      const w = el.width ?? 0
+      const h = el.height ?? 0
+      const left = Math.min(x, x + w)
+      const right = Math.max(x, x + w)
+      const top = Math.min(y, y + h)
+      const bottom = Math.max(y, y + h)
+      return { left, right, top, bottom, centerX: (left + right) / 2, centerY: (top + bottom) / 2 }
+    }
+
     draggedElements.forEach(draggedEl => {
       const currentPos = currentPositions[draggedEl.id] || { x: draggedEl.x, y: draggedEl.y }
-      const draggedCenterX = currentPos.x + (draggedEl.width || 0) / 2
-      const draggedCenterY = currentPos.y + (draggedEl.height || 0) / 2
-      const draggedRight = currentPos.x + (draggedEl.width || 0)
-      const draggedBottom = currentPos.y + (draggedEl.height || 0)
+      const dragged = getAlignBounds(draggedEl, currentPos)
 
       referenceElements.forEach(refEl => {
-        const refCenterX = refEl.x + (refEl.width || 0) / 2
-        const refCenterY = refEl.y + (refEl.height || 0) / 2
-        const refRight = refEl.x + (refEl.width || 0)
-        const refBottom = refEl.y + (refEl.height || 0)
+        const ref = getAlignBounds(refEl)
 
         // Vertical alignment checks
         // Left edges
-        if (Math.abs(currentPos.x - refEl.x) <= SNAP_THRESHOLD) {
-          guides.vertical.push(refEl.x)
+        if (Math.abs(dragged.left - ref.left) <= SNAP_THRESHOLD) {
+          guides.vertical.push(ref.left)
         }
         // Centers
-        if (Math.abs(draggedCenterX - refCenterX) <= SNAP_THRESHOLD) {
-          guides.vertical.push(refCenterX)
+        if (Math.abs(dragged.centerX - ref.centerX) <= SNAP_THRESHOLD) {
+          guides.vertical.push(ref.centerX)
         }
         // Right edges
-        if (Math.abs(draggedRight - refRight) <= SNAP_THRESHOLD) {
-          guides.vertical.push(refRight)
+        if (Math.abs(dragged.right - ref.right) <= SNAP_THRESHOLD) {
+          guides.vertical.push(ref.right)
         }
 
         // Horizontal alignment checks
         // Top edges
-        if (Math.abs(currentPos.y - refEl.y) <= SNAP_THRESHOLD) {
-          guides.horizontal.push(refEl.y)
+        if (Math.abs(dragged.top - ref.top) <= SNAP_THRESHOLD) {
+          guides.horizontal.push(ref.top)
         }
         // Centers
-        if (Math.abs(draggedCenterY - refCenterY) <= SNAP_THRESHOLD) {
-          guides.horizontal.push(refCenterY)
+        if (Math.abs(dragged.centerY - ref.centerY) <= SNAP_THRESHOLD) {
+          guides.horizontal.push(ref.centerY)
         }
         // Bottom edges
-        if (Math.abs(draggedBottom - refBottom) <= SNAP_THRESHOLD) {
-          guides.horizontal.push(refBottom)
+        if (Math.abs(dragged.bottom - ref.bottom) <= SNAP_THRESHOLD) {
+          guides.horizontal.push(ref.bottom)
         }
       })
     })
@@ -1355,6 +1366,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         const deltaY = canvasPoint.y - resizeStartPoint.y
 
         const newBounds = { ...resizeStartBounds }
+        const safeStartWidth = Math.max(1, resizeStartBounds.width)
+        const safeStartHeight = Math.max(1, resizeStartBounds.height)
 
         // Handle different resize directions
         switch (resizeHandle) {
@@ -1396,7 +1409,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             // Handle border radius for rectangles
             if (element.type === 'rectangle') {
               // Calculate radius based on distance from corner
-              const maxRadius = Math.min(resizeStartBounds.width, resizeStartBounds.height) / 2
+              const maxRadius = Math.min(safeStartWidth, safeStartHeight) / 2
               const radiusValue = Math.max(0, Math.min(Math.abs(deltaX + deltaY) / 2, maxRadius))
 
               // Apply the border radius immediately
@@ -1469,8 +1482,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         }
 
         // Ensure minimum size
-        newBounds.width = Math.max(10, newBounds.width)
-        newBounds.height = Math.max(10, newBounds.height)
+        newBounds.width = Math.max(1, newBounds.width)
+        newBounds.height = Math.max(1, newBounds.height)
 
         // Apply snap to grid for position and size
         if (snapEnabled) {
@@ -1518,8 +1531,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             }
           } else {
             // For other elements with Shift key, maintain original aspect ratio
-            const aspectRatio = resizeStartBounds.width / resizeStartBounds.height
-            if (newBounds.width / newBounds.height > aspectRatio) {
+            const aspectRatio = safeStartWidth / safeStartHeight
+            const safeNewHeight = Math.max(1, newBounds.height)
+            if (newBounds.width / safeNewHeight > aspectRatio) {
               newBounds.width = newBounds.height * aspectRatio
             } else {
               newBounds.height = newBounds.width / aspectRatio
@@ -1536,6 +1550,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             }
           }
         }
+
+        newBounds.width = Math.max(1, newBounds.width)
+        newBounds.height = Math.max(1, newBounds.height)
 
         // Apply changes directly during resize for immediate feedback
         onUpdateElement(element.id, newBounds, { commitHistory: false })
@@ -1596,7 +1613,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
       // Calculate the movement delta from the first unlocked element (reference element)
       const firstElement = elements.find(el => el.id === unlocked[0])
-      if (firstElement) {
+      if (!firstElement) {
+        return
+      }
+
         // Calculate raw delta (before any snapping)
         let deltaX = newX - firstElement.x
         let deltaY = newY - firstElement.y
@@ -1708,7 +1728,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         unlocked.forEach(elementId => {
           const element = elements.find(el => el.id === elementId)
           if (element) {
-            const { x: finalX, y: finalY } = newPositions[elementId]
+            const finalPosition = newPositions[elementId]
+            if (!finalPosition) {
+              return
+            }
+
+            const { x: finalX, y: finalY } = finalPosition
 
             // For stage elements, also move the circle properties by the same delta
             if (element.type === 'stage' && element.circleX !== undefined && element.circleY !== undefined) {
@@ -1726,7 +1751,6 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             }
           }
         })
-      }
       return
     }
 
@@ -3668,6 +3692,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         onSave={handleActorModalSave}
         position={actorModalPosition}
         currentActorCount={elements.filter(el => el.type === 'actor').length}
+        planTier={userPlan.tier}
       />
 
       <FullscreenSlideshow />

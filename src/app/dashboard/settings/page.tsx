@@ -13,6 +13,9 @@ import {
   EyeOff
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useUserPlan } from '@/hooks/useUserPlan'
+import { PLANS } from '@/lib/plan-config'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,6 +39,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [projectCount, setProjectCount] = useState(0)
+  const userPlan = useUserPlan(user ?? null)
   
   // Estados dos formulários
   const [personalData, setPersonalData] = useState({
@@ -56,6 +61,20 @@ export default function SettingsPage() {
       }))
     }
   }, [user])
+
+  // Fetch project count
+  useEffect(() => {
+    if (user?.id) {
+      const supabase = createClient()
+      supabase
+        .from('projects')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .then(({ count }) => {
+          setProjectCount(count || 0)
+        })
+    }
+  }, [user?.id])
 
   const handlePersonalDataSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -276,44 +295,38 @@ export default function SettingsPage() {
                 <div className="space-y-6">
                   <div className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
-                      <h3 className="font-medium">Plano Gratuito</h3>
-                      <p className="text-sm text-muted-foreground">Até 3 projetos</p>
+                      <h3 className="font-medium">{userPlan.plan.name}</h3>
+                      <p className="text-sm text-muted-foreground">{userPlan.plan.description}</p>
                     </div>
                     <Badge variant="secondary">Atual</Badge>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {!userPlan.isPro && (
                     <Card>
                       <CardHeader>
                         <CardTitle className="text-lg">Plano Pro</CardTitle>
-                        <CardDescription>R$ 29,90/mês</CardDescription>
+                        <CardDescription>R$ 5,00/mês</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2 text-sm">
-                          <li>• Projetos ilimitados</li>
-                          <li>• 10GB de armazenamento</li>
-                          <li>• Suporte prioritário</li>
+                          <li>• {PLANS.pro.limits.maxActorsPerProject} atores por projeto</li>
+                          <li>• {PLANS.pro.limits.maxObjectsPerProject} objetos por projeto</li>
+                          <li>• {PLANS.pro.limits.maxScenesPerProject} cenas por projeto</li>
+                          <li>• {PLANS.pro.limits.maxProjects} projetos</li>
+                          <li>• Caixas de texto, formas e setas ilimitadas</li>
                         </ul>
-                        <Button className="w-full mt-4">Fazer Upgrade</Button>
+                        <Button className="w-full mt-4" onClick={() => router.push('/plans')}>
+                          Fazer Upgrade
+                        </Button>
                       </CardContent>
                     </Card>
+                  )}
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Plano Enterprise</CardTitle>
-                        <CardDescription>R$ 99,90/mês</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <ul className="space-y-2 text-sm">
-                          <li>• Tudo do Pro</li>
-                          <li>• 100GB de armazenamento</li>
-                          <li>• Colaboração em equipe</li>
-                          <li>• API personalizada</li>
-                        </ul>
-                        <Button className="w-full mt-4">Fazer Upgrade</Button>
-                      </CardContent>
-                    </Card>
-                  </div>
+                  {userPlan.isPro && (
+                    <Button className="w-full" onClick={() => router.push('/dashboard/subscription')}>
+                      Gerenciar Assinatura
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -330,43 +343,63 @@ export default function SettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div>
+                      <h3 className="font-medium">Plano Atual</h3>
+                      <p className="text-sm text-muted-foreground">{userPlan.plan.name}</p>
+                    </div>
+                    <Badge>{userPlan.tier === 'pro' ? 'Pro' : 'Gratuito'}</Badge>
+                  </div>
+
                   <div className="space-y-4">
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium">Projetos</span>
-                        <span className="text-sm text-muted-foreground">2 / 3</span>
+                        <span className="text-sm text-muted-foreground">{projectCount} / {userPlan.limits.maxProjects}</span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{ width: '66%' }}></div>
+                        <div
+                          className="bg-primary h-2 rounded-full"
+                          style={{ width: `${Math.min((projectCount / userPlan.limits.maxProjects) * 100, 100)}%` }}
+                        ></div>
                       </div>
                     </div>
 
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium">Armazenamento</span>
-                        <span className="text-sm text-muted-foreground">245 MB / 1 GB</span>
+                        <span className="text-sm font-medium">Atores por projeto</span>
+                        <span className="text-sm text-muted-foreground">Até {userPlan.limits.maxActorsPerProject}</span>
                       </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{ width: '24%' }}></div>
-                      </div>
+                      <p className="text-xs text-muted-foreground">Limite máximo de atores que você pode adicionar em cada projeto</p>
                     </div>
 
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium">Colaboradores</span>
-                        <span className="text-sm text-muted-foreground">0 / 1</span>
+                        <span className="text-sm font-medium">Objetos por projeto</span>
+                        <span className="text-sm text-muted-foreground">Até {userPlan.limits.maxObjectsPerProject}</span>
                       </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{ width: '0%' }}></div>
+                      <p className="text-xs text-muted-foreground">Limite máximo de objetos que você pode adicionar em cada projeto</p>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium">Cenas por projeto</span>
+                        <span className="text-sm text-muted-foreground">Até {userPlan.limits.maxScenesPerProject}</span>
                       </div>
+                      <p className="text-xs text-muted-foreground">Limite máximo de cenas que você pode criar em cada projeto</p>
                     </div>
                   </div>
 
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">
-                      💡 <strong>Dica:</strong> Faça upgrade para o Plano Pro para ter projetos ilimitados e mais armazenamento.
-                    </p>
-                  </div>
+                  {userPlan.tier === 'free' && (
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm text-muted-foreground mb-3">
+                        💡 <strong>Dica:</strong> Faça upgrade para o Plano Pro para ter mais projetos e limites maiores.
+                      </p>
+                      <Button onClick={() => router.push('/plans')} className="w-full">
+                        Fazer Upgrade
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>

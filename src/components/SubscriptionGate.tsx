@@ -275,36 +275,37 @@ function UpgradeModal({ isOpen, onClose, status }: UpgradeModalProps) {
   )
 }
 
-// Trial Warning Banner Component
+// Trial Warning Banner Component — only shows for users on free plan as a soft upgrade nudge
 export function TrialWarningBanner({ user }: { user: User | null }) {
   const status = useTrialStatus(user)
   const router = useRouter()
 
-  if (status.isLoading || !status.isTrialing || status.isExpired) {
+  // Don't show banner while loading, for pro users, or if no user
+  if (status.isLoading || !user) {
     return null
   }
 
-  const color = getStatusColor(status)
-  const bgColor = color === 'yellow' ? 'bg-yellow-50 border-yellow-200' : 'bg-blue-50 border-blue-200'
-  const textColor = color === 'yellow' ? 'text-yellow-800' : 'text-blue-800'
-  const iconColor = color === 'yellow' ? 'text-yellow-600' : 'text-blue-600'
+  // Show upgrade nudge only for free users (no active subscription)
+  if (status.hasActiveSubscription) {
+    return null
+  }
 
   return (
-    <div className={cn('border-b px-4 py-3', bgColor)}>
+    <div className={cn('border-b px-4 py-3', 'bg-blue-50 border-blue-200')}>
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Clock className={cn('w-5 h-5', iconColor)} />
-          <span className={cn('text-sm font-medium', textColor)}>
-            {getStatusMessage(status)}
+          <Crown className={cn('w-5 h-5', 'text-blue-600')} />
+          <span className={cn('text-sm font-medium', 'text-blue-800')}>
+            Você está no Plano Gratuito. Faça upgrade para o Pro e tenha mais recursos!
           </span>
         </div>
         <Button
           size="sm"
           variant="outline"
           onClick={() => router.push('/plans')}
-          className={cn('border-current', textColor)}
+          className={cn('border-current', 'text-blue-800')}
         >
-          Fazer Upgrade
+          Ver Planos
         </Button>
       </div>
     </div>

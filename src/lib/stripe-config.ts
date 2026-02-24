@@ -1,3 +1,4 @@
+import Stripe from 'stripe';
 import { getServerStripe, STRIPE_CONFIG, STRIPE_PLANS } from './stripe';
 import { createClient } from '@supabase/supabase-js';
 
@@ -155,15 +156,7 @@ export async function createBillingPortalSession(
 // Get customer subscriptions from Stripe
 export async function getCustomerSubscriptions(
   customerId: string
-): Promise<Array<{
-  id: string
-  status: string
-  customer: string
-  items: { data: Array<{ price: { id: string } }> }
-  current_period_start: number
-  current_period_end: number
-  default_payment_method?: string
-}>> {
+): Promise<Stripe.Subscription[]> {
   try {
     const subscriptions = await getServerStripe().subscriptions.list({
       customer: customerId,
@@ -182,12 +175,7 @@ export async function getCustomerSubscriptions(
 export async function cancelSubscription(
   subscriptionId: string,
   cancelAtPeriodEnd: boolean = true
-): Promise<{
-  id: string
-  status: string
-  cancel_at_period_end: boolean
-  canceled_at?: number
-}> {
+): Promise<Stripe.Subscription> {
   try {
     if (cancelAtPeriodEnd) {
       // Cancel at period end
@@ -210,11 +198,7 @@ export async function cancelSubscription(
 export async function updateSubscription(
   subscriptionId: string,
   newPriceId: string
-): Promise<{
-  id: string
-  status: string
-  items: { data: Array<{ id: string; price: { id: string } }> }
-}> {
+): Promise<Stripe.Subscription> {
   try {
     const subscription = await getServerStripe().subscriptions.retrieve(subscriptionId);
     
@@ -253,6 +237,19 @@ export async function saveSubscriptionToDatabase(
 ): Promise<void> {
   try {
     const supabase = getSupabase()
+    // Resolve plan name from Stripe product (nickname is often null)
+    const priceId = subscription.items.data[0]?.price?.id
+    let planName = subscription.items.data[0]?.price?.nickname || 'Unknown Plan'
+    if (priceId && planName === 'Unknown Plan') {
+      try {
+        const stripe = getServerStripe()
+        const price = await stripe.prices.retrieve(priceId, { expand: ['product'] })
+        const product = price.product && typeof price.product !== 'string' ? price.product : null
+        if (product && !('deleted' in product)) {
+          planName = product.name
+        }
+      } catch { /* fallback to Unknown Plan */ }
+    }
     const { error } = await supabase
       .from('stripe_subscriptions')
       .upsert({
@@ -260,8 +257,8 @@ export async function saveSubscriptionToDatabase(
         stripe_subscription_id: subscription.id,
         stripe_customer_id: subscription.customer,
         status: subscription.status,
-        plan_id: subscription.items.data[0].price.id,
-        plan_name: subscription.items.data[0].price.nickname || 'Unknown Plan',
+        plan_id: priceId,
+        plan_name: planName,
         current_period_start: new Date(subscription.current_period_start * 1000),
         current_period_end: new Date(subscription.current_period_end * 1000),
         cancel_at_period_end: subscription.cancel_at_period_end,

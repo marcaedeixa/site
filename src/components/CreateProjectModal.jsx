@@ -16,8 +16,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Loader2 } from 'lucide-react'
 import { createProject } from '@/lib/projects'
 import { useAuth } from '@/hooks/useAuth'
+import { createClient } from '@/lib/supabase/client'
 
-export function CreateProjectModal({ open, onOpenChange, onProjectCreated }) {
+export function CreateProjectModal({ open, onOpenChange, onProjectCreated, currentProjectCount, maxProjects }) {
   const [formData, setFormData] = useState({
     name: '',
     description: ''
@@ -40,6 +41,36 @@ export function CreateProjectModal({ open, onOpenChange, onProjectCreated }) {
     }
 
     setLoading(true)
+    setError('')
+
+    // Check project limit
+    if (maxProjects !== undefined && currentProjectCount !== undefined && currentProjectCount >= maxProjects) {
+      setError(`Limite máximo de ${maxProjects} projetos atingido. Faça upgrade para criar mais projetos.`)
+      setLoading(false)
+      return
+    }
+
+    // Check for duplicate project name
+    try {
+      const supabase = createClient()
+      const { data: existingProject } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('user_id', user.id)
+        .ilike('name', formData.name.trim())
+        .maybeSingle()
+
+      if (existingProject) {
+        setError('Já existe um projeto com este nome. Escolha um nome diferente.')
+        setLoading(false)
+        return
+      }
+    } catch (err) {
+      console.error('Erro ao verificar nome do projeto:', err)
+      setError('Erro ao verificar nome do projeto')
+      setLoading(false)
+      return
+    }
     setError('')
 
     try {

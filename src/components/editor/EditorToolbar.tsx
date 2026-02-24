@@ -247,21 +247,21 @@ export function EditorToolbar({
   }
 
   return (
-    <div className="bg-white border-l border-gray-200 px-2 py-4 flex flex-col gap-4 w-16 h-full min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide">
+    <div className="bg-gray-50 border-r border-gray-200 py-3 flex flex-col items-center gap-3 w-12 min-w-12 h-full min-h-0 overflow-y-auto overflow-x-hidden scrollbar-hide">
       {/* Drawing Tools */}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col items-center gap-3">
         {tools.map((tool) => {
           const Icon = tool.icon
           return (
             <Button
               key={tool.id}
-              variant={selectedTool === tool.id ? "default" : "ghost"}
+              variant="ghost"
               size="sm"
               onClick={() => handleToolSelect(tool.id)}
               title={tool.label}
               className={cn(
-                "w-12 h-12 p-0",
-                selectedTool === tool.id && "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                "flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200",
+                selectedTool === tool.id && "bg-gray-300"
               )}
             >
               <Icon className="h-4 w-4" />
@@ -270,7 +270,7 @@ export function EditorToolbar({
         })}
       </div>
 
-      <Separator orientation="horizontal" className="w-full" />
+      <Separator orientation="horizontal" className="w-8" />
 
       {/* Add Text Box Button */}
       <Dialog open={showTextBoxDialog} onOpenChange={setShowTextBoxDialog}>
@@ -278,8 +278,8 @@ export function EditorToolbar({
           <Button
             variant="ghost"
             size="sm"
-            title="Adicionar Caixa de Texto (B)"
-            className="w-12 h-12 p-0 hover:bg-purple-100"
+            title="Adicionar Caixa de Texto"
+            className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200"
           >
             <Type className="h-4 w-4" />
           </Button>
@@ -391,11 +391,11 @@ export function EditorToolbar({
         </DialogContent>
       </Dialog>
 
-      <Separator orientation="horizontal" className="w-full" />
+      <Separator orientation="horizontal" className="w-8" />
 
       {/* Boolean Operations */}
       {selectedElements.length >= 2 && (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col items-center gap-3">
           {booleanOpsEnabled ? null : (
             <span className="text-[10px] text-gray-500 text-center px-1">
               Selecione apenas formas geométricas para habilitar
@@ -405,8 +405,8 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onUnionElements}
-            title={booleanOpsEnabled ? 'União - Combinar formas (Ctrl+Shift+U)' : 'Selecione ao menos duas formas geométricas'}
-            className="w-12 h-12 p-0 hover:bg-green-100"
+            title={booleanOpsEnabled ? 'União - Combinar formas' : 'Selecione ao menos duas formas geométricas'}
+            className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200"
             disabled={!booleanOpsEnabled}
           >
             <Plus className="h-4 w-4" />
@@ -415,8 +415,8 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onSubtractElements}
-            title={booleanOpsEnabled ? 'Subtração - Remover forma superior (Ctrl+Shift+S)' : 'Selecione ao menos duas formas geométricas'}
-            className="w-12 h-12 p-0 hover:bg-red-100"
+            title={booleanOpsEnabled ? 'Subtração - Remover forma superior' : 'Selecione ao menos duas formas geométricas'}
+            className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200"
             disabled={!booleanOpsEnabled}
           >
             <Scissors className="h-4 w-4" />
@@ -425,8 +425,8 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onIntersectElements}
-            title={booleanOpsEnabled ? 'Interseção - Manter apenas sobreposição (Ctrl+Shift+I)' : 'Selecione ao menos duas formas geométricas'}
-            className="w-12 h-12 p-0 hover:bg-blue-100"
+            title={booleanOpsEnabled ? 'Interseção - Manter apenas sobreposição' : 'Selecione ao menos duas formas geométricas'}
+            className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200"
             disabled={!booleanOpsEnabled}
           >
             <Merge className="h-4 w-4" />
@@ -435,8 +435,8 @@ export function EditorToolbar({
             variant="ghost"
             size="sm"
             onClick={onExcludeElements}
-            title={booleanOpsEnabled ? 'Exclusão - Remover sobreposição (Ctrl+Shift+E)' : 'Selecione ao menos duas formas geométricas'}
-            className="w-12 h-12 p-0 hover:bg-yellow-100"
+            title={booleanOpsEnabled ? 'Exclusão - Remover sobreposição' : 'Selecione ao menos duas formas geométricas'}
+            className="flex items-center justify-center h-10 w-10 p-0 hover:bg-gray-200"
             disabled={!booleanOpsEnabled}
           >
             <XCircle className="h-4 w-4" />

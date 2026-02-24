@@ -51,6 +51,18 @@ export async function POST(request: NextRequest) {
     // Log the event for debugging
     console.log('Received Stripe webhook event:', event.type, event.id);
 
+    // Check for idempotency - skip if already processed
+    const { data: existingEvent } = await supabase
+      .from('stripe_webhook_events')
+      .select('id, processed')
+      .eq('stripe_event_id', event.id)
+      .single();
+
+    if (existingEvent && existingEvent.processed) {
+      console.log('Webhook event already processed, skipping:', event.id);
+      return NextResponse.json({ received: true, skipped: true });
+    }
+
     // Save webhook event to database for audit
     await saveWebhookEvent(event);
 
@@ -235,13 +247,10 @@ async function handleInvoicePaymentSucceeded(invoice: any) {
   console.log('Invoice payment succeeded:', invoice.id);
   
   try {
-    // Update subscription status if needed
-    if (invoice.subscription) {
-      await supabase
-        .from('stripe_subscriptions')
-        .update({ status: 'active' })
-        .eq('stripe_subscription_id', invoice.subscription);
-    }
+    // Don't blindly set subscription to active - let the subscription.updated event handle status
+    // The invoice.payment_succeeded means payment was collected, but subscription status
+    // should be managed by subscription events (created/updated/deleted)
+    // This prevents race conditions between webhook ordering
   } catch (error) {
     console.error('Error handling invoice payment succeeded:', error);
   }

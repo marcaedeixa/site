@@ -119,6 +119,21 @@
   display: none;
 }
 
+.hero-preview-animate {
+  animation: hero-float 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

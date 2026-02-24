@@ -11,6 +11,7 @@ import { Element } from '@/hooks/useEditorStore'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { useParams } from 'next/navigation'
+import { getLimitsForTier, getLimitReachedMessage, type PlanTier } from '@/lib/plan-config'
 
 interface ObjectModalProps {
   isOpen: boolean
@@ -18,6 +19,7 @@ interface ObjectModalProps {
   onSave: (objectData: Partial<Element>) => void
   position: { x: number; y: number }
   currentObjectCount: number
+  planTier?: PlanTier
 }
 
 // Cores disponíveis para objetos
@@ -41,7 +43,7 @@ const OBJECT_SHAPES = [
   { name: 'Hexágono', value: 'hexagon' }
 ]
 
-export function ObjectModal({ isOpen, onClose, onSave, position, currentObjectCount }: ObjectModalProps) {
+export function ObjectModal({ isOpen, onClose, onSave, position, currentObjectCount, planTier }: ObjectModalProps) {
   const { user } = useAuth()
   const params = useParams()
   const projectId = params?.projectId as string
@@ -136,8 +138,9 @@ export function ObjectModal({ isOpen, onClose, onSave, position, currentObjectCo
     if (!validateForm() || !user || !projectId) return
 
     // Check object limit
-    if (currentObjectCount >= 50) {
-      setErrors({ objectName: 'Limite máximo de 50 objetos por projeto atingido' })
+    const limits = getLimitsForTier(planTier)
+    if (currentObjectCount >= limits.maxObjectsPerProject) {
+      setErrors({ objectName: getLimitReachedMessage('maxObjectsPerProject', planTier) })
       return
     }
 

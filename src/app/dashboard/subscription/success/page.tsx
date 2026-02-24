@@ -15,16 +15,18 @@ function SubscriptionSuccessContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('session_id')
+  const paymentIntent = searchParams.get('payment_intent')
+  const redirectStatus = searchParams.get('redirect_status')
   const supabase = createClient()
 
   useEffect(() => {
-    if (sessionId) {
+    if (sessionId || (paymentIntent && redirectStatus === 'succeeded')) {
       verifySession()
     } else {
       setError('Sessão de pagamento não encontrada')
       setLoading(false)
     }
-  }, [sessionId])
+  }, [sessionId, paymentIntent, redirectStatus])
 
   const verifySession = async () => {
     try {

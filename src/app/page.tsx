@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -25,6 +25,13 @@ export default function Home() {
   const { user } = useAuth()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  // Redireciona usuário logado pro dashboard
+  useEffect(() => {
+    if (user) {
+      router.push('/dashboard')
+    }
+  }, [user, router])
 
   const handleGetStarted = () => {
     if (user) {
@@ -263,7 +270,7 @@ export default function Home() {
                     </div>
                     <span className="ml-4 text-gray-500 text-sm font-mono">editor.marcaedeixa.com</span>
                   </div>
-                  <div className="aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 p-8">
+                  <div className="hero-preview-animate aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 p-8">
                     <div className="h-full border-2 border-dashed border-gray-700 rounded-2xl flex items-center justify-center">
                       <div className="text-center">
                         <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">

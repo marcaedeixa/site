@@ -18,6 +18,8 @@ import {
   Clock
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
+import { useAuth } from '@/hooks/useAuth'
+import { useUserPlan } from '@/hooks/useUserPlan'
 
 export function ScenesTab() {
   const {
@@ -39,6 +41,9 @@ export function ScenesTab() {
     reorderScenes
   } = useEditorStore()
 
+  const { user } = useAuth()
+  const userPlan = useUserPlan(user ?? null)
+
   const [editingSceneIndex, setEditingSceneIndex] = useState<number | null>(null)
   const [editingName, setEditingName] = useState('')
   const [intervalInput, setIntervalInput] = useState(slideshowInterval / 1000)
@@ -51,11 +56,11 @@ export function ScenesTab() {
   }, [slideshowInterval])
 
   const handleAddScene = () => {
-    addScene()
+    addScene(undefined, userPlan.limits.maxScenesPerProject)
   }
 
   const handleDuplicateScene = (index: number) => {
-    duplicateScene(index)
+    duplicateScene(index, userPlan.limits.maxScenesPerProject)
   }
 
   const handleDeleteScene = (index: number) => {
