@@ -42,7 +42,6 @@ export default function PricingSection({
     let active = true
     const loadPrices = async () => {
       setPricesLoading(true)
-      setPriceError(null)
       try {
         const response = await fetch('/api/stripe/prices')
         if (!response.ok) {
