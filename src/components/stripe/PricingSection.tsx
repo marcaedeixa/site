@@ -35,7 +35,6 @@ export default function PricingSection({
   const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly')
   const [loading, setLoading] = useState<string | null>(null)
   const [pricesLoading, setPricesLoading] = useState(true)
-  const [priceError, setPriceError] = useState<string | null>(null)
   const [pricePlans, setPricePlans] = useState<Record<string, StripePlan> | null>(null)
   const router = useRouter()
 
@@ -62,9 +61,9 @@ export default function PricingSection({
           setPricePlans(mapped)
         }
       } catch (error) {
-        if (active) {
-          setPriceError(error instanceof Error ? error.message : 'Erro ao carregar preços')
-        }
+        // Silently fall back to static prices from plan-config.ts
+        // The plan cards already use PLANS.pro.prices as fallback (lines 98-99)
+        console.warn('Failed to load Stripe prices, using static fallback:', error instanceof Error ? error.message : error)
       } finally {
         if (active) {
           setPricesLoading(false)
@@ -143,11 +142,6 @@ export default function PricingSection({
           <p className="text-xl text-gray-500 max-w-2xl mx-auto">
             Comece gratuitamente e faça upgrade quando precisar
           </p>
-          {priceError && (
-            <p className="text-sm text-red-500 mt-4">
-              Preços temporariamente indisponíveis. Tente novamente mais tarde.
-            </p>
-          )}
         </div>
 
         {/* Billing Toggle */}
@@ -202,7 +196,7 @@ export default function PricingSection({
             const isLoading = loading === plan.key
             const isFree = plan.key === 'free'
             const isPro = plan.key === 'pro'
-            const isPriceUnavailable = !isFree && !pricesLoading && !!priceError
+            const isPriceUnavailable = false // fallback to static prices always works
 
             return (
               <div

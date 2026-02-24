@@ -78,11 +78,11 @@ export async function GET() {
     ]
 
     return NextResponse.json({ plans })
-  } catch (error) {
-    console.error('Error fetching Stripe prices:', error)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('Error fetching Stripe prices:', message)
     return NextResponse.json(
-      { error: 'Erro ao buscar preços do Stripe' },
+      { error: 'Erro ao buscar preços do Stripe', details: message },
       { status: 500 }
     )
-  }
 }
