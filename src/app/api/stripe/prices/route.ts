@@ -85,4 +85,5 @@ export async function GET() {
       { error: 'Erro ao buscar preços do Stripe', details: message },
       { status: 500 }
     )
+  }
 }
