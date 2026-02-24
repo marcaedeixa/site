@@ -262,14 +262,6 @@ export default function Home() {
               <div className="relative">
                 {/* Main Card */}
                 <div className="bg-black rounded-3xl shadow-2xl overflow-hidden">
-                  <div className="bg-gray-900 px-6 py-4 flex items-center gap-2">
-                    <div className="flex gap-2">
-                      <div className="w-3 h-3 bg-red-500 rounded-full" />
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-                      <div className="w-3 h-3 bg-green-500 rounded-full" />
-                    </div>
-                    <span className="ml-4 text-gray-500 text-sm font-mono">editor.marcaedeixa.com</span>
-                  </div>
                   <div className="hero-preview-animate aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 p-8">
                     <div className="h-full border-2 border-dashed border-gray-700 rounded-2xl flex items-center justify-center">
                       <div className="text-center">

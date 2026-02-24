@@ -366,14 +366,14 @@ export default function PricingSection({
         {/* Trust */}
         <div className="mt-16 text-center">
           <p className="text-sm text-gray-400 mb-4">Pagamentos seguros processados por Stripe</p>
-          <div className="flex justify-center items-center gap-8 text-gray-300">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5" />
-              <span className="text-sm">SSL Seguro</span>
+          <div className="flex justify-center items-center gap-8">
+            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full">
+              <Shield className="w-4 h-4" />
+              <span className="text-sm font-medium">SSL Seguro</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Check className="w-5 h-5" />
-              <span className="text-sm">Garantia de 7 dias</span>
+            <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full">
+              <Check className="w-4 h-4" />
+              <span className="text-sm font-medium">Garantia de 7 dias</span>
             </div>
           </div>
         </div>
