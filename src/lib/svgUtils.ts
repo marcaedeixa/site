@@ -9,7 +9,9 @@ export interface Shape {
   width?: number;
   height?: number;
   radius?: number;
+  rotation?: number;
   path?: string;
+  pathBounds?: { x: number; y: number; width: number; height: number };
 }
 
 // Interface para o resultado da operação
@@ -35,7 +37,8 @@ export function convertElementToShape(element: any): Shape | null {
         y: element.y,
         width: element.width,
         height: element.height,
-        radius: element.radius || Math.min(element.width || 0, element.height || 0) / 2
+        radius: element.radius || Math.min(element.width || 0, element.height || 0) / 2,
+        rotation: element.rotation || 0
       };
     
     case 'rectangle':
@@ -44,7 +47,8 @@ export function convertElementToShape(element: any): Shape | null {
         x: element.x,
         y: element.y,
         width: element.width,
-        height: element.height
+        height: element.height,
+        rotation: element.rotation || 0
       };
     
     case 'path':
@@ -52,7 +56,11 @@ export function convertElementToShape(element: any): Shape | null {
         type: 'path',
         x: element.x,
         y: element.y,
-        path: element.pathData
+        width: element.width,
+        height: element.height,
+        rotation: element.rotation || 0,
+        path: element.pathData,
+        pathBounds: element.pathBounds
       };
     
     default:
@@ -110,36 +118,62 @@ async function createPaperPath(shape: Shape): Promise<any> {
     if (!paper) return null;
     
     switch (shape.type) {
-      case 'circle':
+      case 'circle': {
+        let path: any = null;
         if (shape.radius) {
-          return new paper.Path.Circle({
+          path = new paper.Path.Circle({
             center: [shape.x + shape.radius, shape.y + shape.radius],
             radius: shape.radius
           });
         } else if (shape.width && shape.height) {
-          // Fallback para quando radius não está definido
           const radius = Math.min(shape.width, shape.height) / 2;
-          return new paper.Path.Circle({
+          path = new paper.Path.Circle({
             center: [shape.x + radius, shape.y + radius],
             radius: radius
           });
         }
+        if (path) {
+          if (shape.rotation) {
+            path.rotate(shape.rotation, new paper.Point(path.bounds.center.x, path.bounds.center.y));
+          }
+          return path;
+        }
         break;
+      }
       
-      case 'rectangle':
+      case 'rectangle': {
         if (shape.width && shape.height) {
-          return new paper.Path.Rectangle({
+          const path = new paper.Path.Rectangle({
             point: [shape.x, shape.y],
             size: [shape.width, shape.height]
           });
+          if (shape.rotation) {
+            path.rotate(shape.rotation, new paper.Point(shape.x + shape.width / 2, shape.y + shape.height / 2));
+          }
+          return path;
         }
         break;
+      }
       
-      case 'path':
+      case 'path': {
         if (shape.path) {
-          return new paper.Path(shape.path);
+          const path = new paper.Path(shape.path);
+          const pb = shape.pathBounds;
+          if (pb) {
+            const sx = pb.width ? ((shape.width ?? pb.width) / pb.width) : 1;
+            const sy = pb.height ? ((shape.height ?? pb.height) / pb.height) : 1;
+            path.scale(sx, sy);
+            path.translate(new paper.Point(shape.x - pb.x, shape.y - pb.y));
+          } else {
+            path.translate(new paper.Point(shape.x, shape.y));
+          }
+          if (shape.rotation) {
+            path.rotate(shape.rotation, new paper.Point(path.bounds.center.x, path.bounds.center.y));
+          }
+          return path;
         }
         break;
+      }
     }
     return null;
   } catch (error) {
