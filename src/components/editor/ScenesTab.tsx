@@ -56,11 +56,21 @@ export function ScenesTab() {
   }, [slideshowInterval])
 
   const handleAddScene = () => {
-    addScene(undefined, userPlan.limits.maxScenesPerProject)
+    const maxScenes = userPlan.limits.maxScenesPerProject
+    if (scenes.length >= maxScenes) {
+      alert(`Limite máximo de ${maxScenes} cenas atingido para seu plano.`)
+      return
+    }
+    addScene(undefined, maxScenes)
   }
 
   const handleDuplicateScene = (index: number) => {
-    duplicateScene(index, userPlan.limits.maxScenesPerProject)
+    const maxScenes = userPlan.limits.maxScenesPerProject
+    if (scenes.length >= maxScenes) {
+      alert(`Limite máximo de ${maxScenes} cenas atingido para seu plano.`)
+      return
+    }
+    duplicateScene(index, maxScenes)
   }
 
   const handleDeleteScene = (index: number) => {
