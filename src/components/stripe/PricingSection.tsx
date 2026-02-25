@@ -15,11 +15,13 @@ interface PricingSectionProps {
   onSelectPlan?: (priceId: string, planName: string) => void
   className?: string
   variant?: 'default' | 'compact'
+  showTrialOption?: boolean
 }
 
 type BillingInterval = 'monthly' | 'yearly'
 type StripePrice = { priceId: string; amount: number; interval: 'month' | 'year' }
 type StripePlan = {
+  key: string
   name: string
   description: string
   features: string[]
@@ -93,8 +95,8 @@ export default function PricingSection({
       name: PLANS.pro.name,
       description: PLANS.pro.description,
       price: billingInterval === 'monthly'
-        ? (pricePlans?.pro?.prices?.monthly.amount ?? PLANS.pro.prices.monthly.amount)
-        : (pricePlans?.pro?.prices?.yearly.amount ?? PLANS.pro.prices.yearly.amount),
+        ? (pricePlans?.pro?.prices?.monthly.amount ?? PLANS.pro.prices?.monthly.amount ?? 0)
+        : (pricePlans?.pro?.prices?.yearly.amount ?? PLANS.pro.prices?.yearly.amount ?? 0),
       priceId: billingInterval === 'monthly'
         ? pricePlans?.pro?.prices?.monthly.priceId || ''
         : pricePlans?.pro?.prices?.yearly.priceId || '',
@@ -286,8 +288,8 @@ export default function PricingSection({
                           isPro ? 'text-green-400' : 'text-green-600'
                         )}>
                           Economia de {yearlyDiscount(
-                            PLANS.pro.prices.monthly.amount,
-                            PLANS.pro.prices.yearly.amount
+                            PLANS.pro.prices?.monthly.amount ?? 0,
+                            PLANS.pro.prices?.yearly.amount ?? 0
                           )}%
                         </p>
                       )}

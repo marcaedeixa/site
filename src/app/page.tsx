@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { useState, useEffect } from 'react'
 import { 
   ChevronDown, 
-  ChevronUp, 
   Play, 
   Users, 
   Layers, 

@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 
     const shareToken = randomBytes(32).toString('hex')
 
-    const { data: share, error: shareError } = await supabase
+    const { error: shareError } = await supabase
       .from('project_shares')
       .insert({
         project_id: projectId,

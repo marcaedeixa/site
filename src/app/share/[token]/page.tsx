@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -129,11 +130,11 @@ function Brand() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <a href="/" className="flex items-center gap-3 group">
+          <Link href="/" className="flex items-center gap-3 group">
             <span className="text-xl font-black tracking-tight text-black">
               marca<span className="text-gray-400">e</span>deixa
             </span>
-          </a>
+          </Link>
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <Share2 className="w-4 h-4" />
             <span className="hidden sm:inline">Projeto Compartilhado</span>
