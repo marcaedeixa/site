@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createServerClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { checkStripeSubscription } from '@/middleware/stripeSubscription'
 
 // Rotas que requerem autenticação administrativa
@@ -12,6 +13,29 @@ const adminPublicRoutes = ['/admin/login']
 const subscriptionRoutes = ['/dashboard']
 // Rotas públicas (não requerem assinatura)
 const publicRoutes = ['/', '/login', '/register', '/plans', '/pricing', '/checkout', '/auth']
+
+function createMiddlewareSupabaseClient(request: NextRequest, response: NextResponse) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Missing Supabase env vars in middleware')
+  }
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return request.cookies.get(name)?.value
+      },
+      set(name: string, value: string, options: Record<string, unknown>) {
+        response.cookies.set({ name, value, ...options })
+      },
+      remove(name: string, options: Record<string, unknown>) {
+        response.cookies.set({ name, value: '', ...options })
+      },
+    },
+  })
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -26,7 +50,8 @@ export async function middleware(request: NextRequest) {
   
   if (isAdminRoute && !isAdminPublicRoute) {
     try {
-      const supabase = createClient()
+      const response = NextResponse.next()
+      const supabase = createMiddlewareSupabaseClient(request, response)
       
       // Verificar se há sessão ativa
       const { data: { session }, error } = await supabase.auth.getSession()
@@ -57,7 +82,6 @@ export async function middleware(request: NextRequest) {
       await logAdminAccess(supabase, adminUser.id, pathname, request)
       
       // Adicionar headers com informações do admin
-      const response = NextResponse.next()
       response.headers.set('x-admin-user-id', adminUser.id)
       response.headers.set('x-admin-role', adminUser.role)
       
@@ -74,7 +98,8 @@ export async function middleware(request: NextRequest) {
   // Se é rota de login admin e já está autenticado, redirecionar para dashboard
   if (pathname === '/admin/login') {
     try {
-      const supabase = createClient()
+      const response = NextResponse.next()
+      const supabase = createMiddlewareSupabaseClient(request, response)
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session) {
@@ -89,7 +114,7 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL('/admin', request.url))
         }
       }
-    } catch (error) {
+    } catch {
       // Continuar para a página de login em caso de erro
     }
   }
@@ -105,7 +130,7 @@ export async function middleware(request: NextRequest) {
 
 // Função para registrar acesso administrativo
 async function logAdminAccess(
-  supabase: any,
+  supabase: SupabaseClient,
   adminUserId: string,
   pathname: string,
   request: NextRequest
@@ -114,7 +139,7 @@ async function logAdminAccess(
     const userAgent = request.headers.get('user-agent') || ''
     const forwardedFor = request.headers.get('x-forwarded-for')
     const realIp = request.headers.get('x-real-ip')
-    const ip = forwardedFor?.split(',')[0] || realIp || request.ip || 'unknown'
+    const ip = forwardedFor?.split(',')[0] || realIp || 'unknown'
     
     await supabase
       .from('admin_access_logs')
