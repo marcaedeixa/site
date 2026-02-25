@@ -383,7 +383,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   }, [textEditor, editingElement, viewport, containerRef, canvasRef, computeTextMetrics, computeWrappedTextHeight])
 
   const updateTextElementDimensions = useCallback((elementId: string, value: string) => {
-    const element = elements.find(el => el.id === elementId)
+    const element = useEditorStore.getState().elements.find(el => el.id === elementId)
     if (!element) return
     const fontSize = element.fontSize ?? 16
     if (element.type === 'textbox') {
@@ -412,13 +412,13 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       width,
       height
     })
-  }, [elements, computeTextMetrics, computeWrappedTextHeight, onUpdateElement])
+  }, [computeTextMetrics, computeWrappedTextHeight, onUpdateElement])
 
   const closeTextEditor = useCallback((commit: boolean) => {
     if (!textEditor) return
     const { elementId, value, initialValue } = textEditor
     const trimmedValue = value.trim()
-    const targetElement = elements.find(el => el.id === elementId)
+    const targetElement = useEditorStore.getState().elements.find(el => el.id === elementId)
     if (!targetElement) {
       setTextEditor(null)
       return
@@ -428,29 +428,37 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       if (trimmedValue === '') {
         useEditorStore.getState().deleteElements([elementId])
       } else {
-        const fontSize = targetElement.fontSize ?? 16
-        const { width, height } = computeTextMetrics(value, fontSize)
-        if (targetElement.text !== value || targetElement.width !== width || targetElement.height !== height) {
+        if (targetElement.type === 'textbox') {
           updateTextElementDimensions(elementId, value)
+        } else {
+          const fontSize = targetElement.fontSize ?? 16
+          const { width, height } = computeTextMetrics(value, fontSize)
+          if (targetElement.text !== value || targetElement.width !== width || targetElement.height !== height) {
+            updateTextElementDimensions(elementId, value)
+          }
         }
       }
     } else {
       if (initialValue.trim() === '') {
         useEditorStore.getState().deleteElements([elementId])
       } else {
-        if (targetElement.text !== initialValue) {
+        if (targetElement.type === 'textbox') {
           updateTextElementDimensions(elementId, initialValue)
+        } else {
+          if (targetElement.text !== initialValue) {
+            updateTextElementDimensions(elementId, initialValue)
+          }
         }
       }
     }
     setTextEditor(null)
-  }, [textEditor, elements, computeTextMetrics, updateTextElementDimensions])
+  }, [textEditor, computeTextMetrics, updateTextElementDimensions])
 
   const handleTextEditorChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!textEditor) return
     const newValue = event.target.value
     setTextEditor(prev => prev ? { ...prev, value: newValue } : prev)
-    const element = elements.find(el => el.id === textEditor.elementId)
+    const element = useEditorStore.getState().elements.find(el => el.id === textEditor.elementId)
     if (element) {
       const fontSize = element.fontSize ?? 16
       let needsSceneUpdate = false
@@ -498,7 +506,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         updateCurrentScene()
       }
     }
-  }, [textEditor, elements, computeTextMetrics, computeWrappedTextHeight])
+  }, [textEditor, computeTextMetrics, computeWrappedTextHeight])
 
   const handleTextEditorKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Escape') {
