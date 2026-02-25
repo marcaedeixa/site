@@ -21,10 +21,14 @@ import {
   Maximize
 } from 'lucide-react'
 import { useEditorStore } from '@/hooks/useEditorStore'
+import { useAuth } from '@/hooks/useAuth'
+import { useUserPlan } from '@/hooks/useUserPlan'
 
 export function EditorBottomBar() {
   const [isExpanded, setIsExpanded] = useState(false)
-  
+  const { user } = useAuth()
+  const userPlan = useUserPlan(user ?? null)
+
   const {
     scenes,
     currentSceneIndex,
@@ -57,11 +61,11 @@ export function EditorBottomBar() {
   }, [slideshowInterval])
 
   const handleAddScene = () => {
-    addScene()
+    addScene(undefined, userPlan.limits.maxScenesPerProject)
   }
 
   const handleDuplicateScene = (index: number) => {
-    duplicateScene(index)
+    duplicateScene(index, userPlan.limits.maxScenesPerProject)
   }
 
   const handleDeleteScene = (index: number) => {
