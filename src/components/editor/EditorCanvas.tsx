@@ -265,6 +265,40 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     return { lines, lineHeight, width, height: Math.ceil(height) + 2 }
   }, [measureTextWidth])
 
+  // Compute text height accounting for word-wrapping within a given container width
+  const computeWrappedTextHeight = useCallback((text: string, fontSize: number, containerWidth: number) => {
+    const sanitized = text ?? ''
+    const paragraphs = sanitized.split(/\r?\n/)
+    const lineHeight = fontSize * 1.2
+    const padding = 16 // same padding used in textbox dimension calcs
+    const availableWidth = containerWidth - padding
+    let totalLines = 0
+
+    for (const paragraph of paragraphs) {
+      if (paragraph === '') {
+        totalLines += 1
+        continue
+      }
+      const words = paragraph.split(' ')
+      let currentLine = ''
+      for (const word of words) {
+        const testLine = currentLine + (currentLine ? ' ' : '') + word
+        const testWidth = measureTextWidth(testLine, fontSize)
+        if (testWidth > availableWidth && currentLine) {
+          totalLines += 1
+          currentLine = word
+        } else {
+          currentLine = testLine
+        }
+      }
+      if (currentLine) {
+        totalLines += 1
+      }
+    }
+
+    return Math.max(lineHeight, totalLines * lineHeight)
+  }, [measureTextWidth])
+
   const openTextEditor = useCallback((element: Element) => {
     setTextEditor({
       elementId: element.id,
@@ -311,10 +345,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
     if (editingElement.type === 'textbox') {
       const baseWidth = Math.max(300, editingElement.width ?? metrics.width)
-      const lines = Math.max(1, textEditor.value.split(/\r?\n/).length)
       const lineHeightBox = fontSize * 1.4
       padding = 8
-      const contentHeight = lines * lineHeightBox + padding * 2
+      const wrappedHeight = computeWrappedTextHeight(textEditor.value, fontSize, baseWidth)
+      const contentHeight = wrappedHeight + padding * 2
       editorWidth = baseWidth
       editorHeight = Math.max(editingElement.height ?? fontSize * 1.5, contentHeight)
       editorLineHeight = lineHeightBox
@@ -346,17 +380,18 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       backgroundClip: 'padding-box',
       caretColor: '#000000'
     }
-  }, [textEditor, editingElement, viewport, containerRef, canvasRef, computeTextMetrics])
+  }, [textEditor, editingElement, viewport, containerRef, canvasRef, computeTextMetrics, computeWrappedTextHeight])
 
   const updateTextElementDimensions = useCallback((elementId: string, value: string) => {
     const element = elements.find(el => el.id === elementId)
     if (!element) return
     const fontSize = element.fontSize ?? 16
     if (element.type === 'textbox') {
-      const { width: metricsWidth, height: metricsHeight, lineHeight } = computeTextMetrics(value, fontSize)
+      const { width: metricsWidth, lineHeight } = computeTextMetrics(value, fontSize)
       const padding = 16
       const newWidth = Math.max(element.width ?? metricsWidth + padding, metricsWidth + padding)
-      const newHeight = Math.max(element.height ?? fontSize * 1.5 + padding, metricsHeight + padding)
+      const wrappedHeight = computeWrappedTextHeight(value, fontSize, newWidth)
+      const newHeight = Math.max(element.height ?? fontSize * 1.5 + padding, wrappedHeight + padding)
 
       onUpdateElement(elementId, {
         text: value,
@@ -377,7 +412,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       width,
       height
     })
-  }, [elements, computeTextMetrics, onUpdateElement])
+  }, [elements, computeTextMetrics, computeWrappedTextHeight, onUpdateElement])
 
   const closeTextEditor = useCallback((commit: boolean) => {
     if (!textEditor) return
@@ -420,10 +455,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       const fontSize = element.fontSize ?? 16
       let needsSceneUpdate = false
       if (element.type === 'textbox') {
-        const { width: metricsWidth, height: metricsHeight, lineHeight } = computeTextMetrics(newValue, fontSize)
+        const { width: metricsWidth, lineHeight } = computeTextMetrics(newValue, fontSize)
         const padding = 16
         const newWidth = Math.max(element.width ?? metricsWidth + padding, metricsWidth + padding)
-        const newHeight = Math.max(element.height ?? fontSize * 1.5 + padding, metricsHeight + padding)
+        const wrappedHeight = computeWrappedTextHeight(newValue, fontSize, newWidth)
+        const newHeight = Math.max(element.height ?? fontSize * 1.5 + padding, wrappedHeight + padding)
 
         useEditorStore.setState((state) => ({
           elements: state.elements.map(el =>
@@ -462,7 +498,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         updateCurrentScene()
       }
     }
-  }, [textEditor, elements, computeTextMetrics])
+  }, [textEditor, elements, computeTextMetrics, computeWrappedTextHeight])
 
   const handleTextEditorKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === 'Escape') {
