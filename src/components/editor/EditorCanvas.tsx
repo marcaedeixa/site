@@ -310,7 +310,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     let padding = 0
 
     if (editingElement.type === 'textbox') {
-      const baseWidth = editingElement.width ?? metrics.width
+      const baseWidth = Math.max(300, editingElement.width ?? metrics.width)
       const lines = Math.max(1, textEditor.value.split(/\r?\n/).length)
       const lineHeightBox = fontSize * 1.4
       padding = 8
@@ -319,6 +319,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       editorHeight = Math.max(editingElement.height ?? fontSize * 1.5, contentHeight)
       editorLineHeight = lineHeightBox
     }
+
+    const isTextbox = editingElement.type === 'textbox'
 
     return {
       position: 'absolute' as const,
@@ -329,20 +331,20 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       fontSize: `${fontSize * viewport.zoom}px`,
       lineHeight: `${editorLineHeight * viewport.zoom}px`,
       fontFamily: 'Arial, sans-serif',
-      color: editingElement.strokeColor || '#000000',
-      background: 'rgba(255,255,255,0.95)',
-      border: `${Math.max(1, 1 * viewport.zoom)}px solid #2563eb`,
-      borderRadius: 4,
+      color: isTextbox ? '#000000' : (editingElement.strokeColor || '#000000'),
+      background: isTextbox ? 'transparent' : 'rgba(255,255,255,0.95)',
+      border: isTextbox ? 'none' : `${Math.max(1, 1 * viewport.zoom)}px solid #2563eb`,
+      borderRadius: isTextbox ? 0 : 4,
       padding: padding ? `${padding * viewport.zoom}px` : 0,
       boxSizing: 'border-box' as const,
       outline: 'none',
       resize: 'none' as const,
-      boxShadow: '0 0 0 1px rgba(37,99,235,0.4)',
+      boxShadow: isTextbox ? 'none' : '0 0 0 1px rgba(37,99,235,0.4)',
       zIndex: 30,
       overflow: 'hidden' as const,
       whiteSpace: 'pre-wrap' as const,
       backgroundClip: 'padding-box',
-      caretColor: editingElement.strokeColor || '#000000'
+      caretColor: '#000000'
     }
   }, [textEditor, editingElement, viewport, containerRef, canvasRef, computeTextMetrics])
 
@@ -1099,8 +1101,13 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     const canvasPoint = screenToCanvas(e.clientX, e.clientY)
     const clickedElement = getElementAtPoint(canvasPoint)
 
-    if ((selectedTool === 'text' || selectedTool === 'textbox') && textEditor) {
+    if (textEditor) {
       closeTextEditor(true)
+      // Switch to select tool to prevent creating a new element on the same click
+      if (selectedTool === 'text' || selectedTool === 'textbox') {
+        useEditorStore.getState().setSelectedTool('select')
+      }
+      return
     }
 
     if (e.button === 0 && e.detail === 2 && clickedElement) {
@@ -1333,16 +1340,16 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       newElement.height = fontSize * 1.2
     } else if (selectedTool === 'textbox') {
       const fontSize = properties.fontSize ?? 16
-      const defaultWidth = 220
-      const defaultHeight = fontSize * 2
       newElement.text = ''
-      newElement.width = defaultWidth
-      newElement.height = defaultHeight
+      newElement.width = 300
+      newElement.height = fontSize * 1.5
       newElement.textBoxConfig = {
         previewMode: 'full',
         fullText: ''
       }
-      newElement.fillColor = '#ffffff'
+      newElement.fillColor = 'transparent'
+      // strokeColor is used for text color, NOT for border
+      newElement.strokeColor = '#000000'
     }
 
     setCurrentElement(newElement)
@@ -2105,15 +2112,15 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     sortedElements.forEach(element => {
       const isSelected = selectedElements.includes(element.id)
       const isBeingDragged = draggedElements.includes(element.id)
+      const isBeingEdited = textEditor?.elementId === element.id
 
       if (isBeingDragged) {
-        // Draw dragged elements with reduced opacity for visual feedback
         ctx.save()
         ctx.globalAlpha = 0.7
-        drawElement(ctx, element, isSelected)
+        drawElement(ctx, element, isSelected, isBeingEdited)
         ctx.restore()
       } else {
-        drawElement(ctx, element, isSelected)
+        drawElement(ctx, element, isSelected, isBeingEdited)
       }
     })
 
@@ -2194,7 +2201,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     ctx.restore()
-  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview, hoverPreviewEnabled, hoveredElementId, hoverPreviewColor, drawHoverOutline])
+  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview, hoverPreviewEnabled, hoveredElementId, hoverPreviewColor, drawHoverOutline, textEditor])
 
   // Draw grid
   const drawGrid = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {
@@ -2340,7 +2347,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   }
 
   // Draw element
-  const drawElement = useCallback((ctx: CanvasRenderingContext2D, element: Partial<Element>, isSelected: boolean) => {
+  const drawElement = useCallback((ctx: CanvasRenderingContext2D, element: Partial<Element>, isSelected: boolean, skipTextRendering = false) => {
     if (!element.type) return
 
     ctx.save()
@@ -2499,24 +2506,21 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       }
 
       case 'textbox':
-        // Draw textbox background
-        if (element.fillColor !== 'transparent') {
-          ctx.fillStyle = element.fillColor || '#ffffff'
+        // Draw textbox background only if explicitly set
+        if (element.fillColor && element.fillColor !== 'transparent') {
+          ctx.fillStyle = element.fillColor
           ctx.fillRect(x, y, width, height)
         }
 
-        // Draw textbox border
-        ctx.strokeStyle = element.strokeColor || '#cccccc'
-        ctx.lineWidth = (element.strokeWidth || 1) / viewport.zoom
-        ctx.strokeRect(x, y, width, height)
+        // No border rect for textbox — strokeColor is used for text color only
 
         // Draw text content based on preview mode
         const baseText = element.text ?? element.textBoxConfig?.fullText ?? ''
 
-        if (baseText) {
+        if (baseText && !skipTextRendering) {
           ctx.save()
-          ctx.font = `${(element.fontSize || 14) / viewport.zoom}px Arial`
-          ctx.fillStyle = element.strokeColor || '#000000'
+          ctx.font = `${(element.fontSize || 16) / viewport.zoom}px Arial`
+          ctx.fillStyle = (element.strokeColor && element.strokeColor !== 'transparent') ? element.strokeColor : '#000000'
           ctx.textAlign = 'left'
           ctx.textBaseline = 'top'
 
@@ -2530,7 +2534,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           const previewMode = element.textBoxConfig?.previewMode || 'full'
 
           if (previewMode !== 'full') {
-            const maxChars = Math.floor(textWidth / ((element.fontSize || 14) * 0.6 / viewport.zoom))
+            const maxChars = Math.floor(textWidth / ((element.fontSize || 16) * 0.6 / viewport.zoom))
 
             switch (previewMode) {
               case 'start':
@@ -2553,33 +2557,36 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             }
           }
 
-          // Simple text wrapping
-          const words = displayText.split(' ')
-          const lines = []
-          let currentLine = ''
+          // Text wrapping with newline support
+          const paragraphs = displayText.split('\n')
+          const lines: string[] = []
 
-          for (const word of words) {
-            const testLine = currentLine + (currentLine ? ' ' : '') + word
-            const testWidth = ctx.measureText(testLine).width
-
-            if (testWidth > textWidth && currentLine) {
+          for (const paragraph of paragraphs) {
+            if (paragraph === '') {
+              lines.push('')
+              continue
+            }
+            const words = paragraph.split(' ')
+            let currentLine = ''
+            for (const word of words) {
+              const testLine = currentLine + (currentLine ? ' ' : '') + word
+              const testWidth = ctx.measureText(testLine).width
+              if (testWidth > textWidth && currentLine) {
+                lines.push(currentLine)
+                currentLine = word
+              } else {
+                currentLine = testLine
+              }
+            }
+            if (currentLine) {
               lines.push(currentLine)
-              currentLine = word
-            } else {
-              currentLine = testLine
             }
           }
 
-          if (currentLine) {
-            lines.push(currentLine)
-          }
-
-          // Draw lines
-          const lineHeight = (element.fontSize || 14) * 1.2 / viewport.zoom
+          // Draw lines (no clipping — let text overflow)
+          const lineHeight = (element.fontSize || 16) * 1.2 / viewport.zoom
           lines.forEach((line, index) => {
-            if (textY + (index * lineHeight) < y + textHeight) {
-              ctx.fillText(line, textX, textY + (index * lineHeight))
-            }
+            ctx.fillText(line, textX, textY + (index * lineHeight))
           })
 
           ctx.restore()

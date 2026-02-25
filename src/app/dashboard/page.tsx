@@ -697,15 +697,6 @@ export default function DashboardPage() {
                             <Trash2 className="h-4 w-4" />
                           )}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleShareProject(project)}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                          title="Compartilhar projeto"
-                        >
-                          <Share2 className="h-4 w-4" />
-                        </Button>
                       </div>
                       <Button 
                         variant="outline" 

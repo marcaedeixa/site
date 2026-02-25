@@ -643,6 +643,47 @@ export function EditorSidebar({ selectedElements, onUpdateElement }: EditorSideb
                       </div>
                     )}
 
+                    {/* Textbox Preview Mode */}
+                    {selectedElement?.type === 'textbox' && (
+                      <div className="space-y-1">
+                        <Label className="text-xs">Modo de Exibição</Label>
+                        <div className="grid grid-cols-2 gap-1">
+                          <Button
+                            variant={(!selectedElement.textBoxConfig?.previewMode || selectedElement.textBoxConfig?.previewMode === 'full') ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => onUpdateElement(selectedElement.id, { textBoxConfig: { ...selectedElement.textBoxConfig, previewMode: 'full', fullText: selectedElement.textBoxConfig?.fullText || '' } })}
+                          >
+                            Completo
+                          </Button>
+                          <Button
+                            variant={selectedElement.textBoxConfig?.previewMode === 'start' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => onUpdateElement(selectedElement.id, { textBoxConfig: { ...selectedElement.textBoxConfig, previewMode: 'start', fullText: selectedElement.textBoxConfig?.fullText || '' } })}
+                          >
+                            Início...
+                          </Button>
+                          <Button
+                            variant={selectedElement.textBoxConfig?.previewMode === 'end' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => onUpdateElement(selectedElement.id, { textBoxConfig: { ...selectedElement.textBoxConfig, previewMode: 'end', fullText: selectedElement.textBoxConfig?.fullText || '' } })}
+                          >
+                            ...Final
+                          </Button>
+                          <Button
+                            variant={selectedElement.textBoxConfig?.previewMode === 'start-end' ? 'default' : 'outline'}
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => onUpdateElement(selectedElement.id, { textBoxConfig: { ...selectedElement.textBoxConfig, previewMode: 'start-end', fullText: selectedElement.textBoxConfig?.fullText || '' } })}
+                          >
+                            Início...Final
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Actor Properties */}
                     {selectedElement?.type === 'actor' && (
                       <div className="space-y-3">

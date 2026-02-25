@@ -28,7 +28,8 @@ import {
   Scissors,
   Merge,
   XCircle,
-  FileText
+  FileText,
+  Type
 } from 'lucide-react'
 import { Tool, useEditorStore } from '@/hooks/useEditorStore'
 import { cn } from '@/lib/utils'
@@ -55,6 +56,7 @@ const tools: { id: Tool; icon: React.ComponentType<React.SVGProps<SVGSVGElement>
   { id: 'line', icon: Minus, label: 'Linha' },
   { id: 'arrow', icon: ArrowRight, label: 'Seta' },
   { id: 'pen', icon: PenTool, label: 'Caneta' },
+  { id: 'textbox', icon: Type, label: 'Caixa de Texto' },
   { id: 'eraser', icon: Eraser, label: 'Borracha' },
 ]
 
@@ -85,7 +87,9 @@ export function EditorToolbar({
       await Promise.resolve(onSave())
 
       const projectData = getProjectDataSnapshot()
-      const data = await exportProjectData(projectId, format, undefined, projectData)
+      const currentSceneIdx = useEditorStore.getState().currentSceneIndex
+      const sceneIdx = format === 'svg' ? currentSceneIdx : undefined
+      const data = await exportProjectData(projectId, format, sceneIdx, projectData)
 
       const isZip = data instanceof Blob && data.type === 'application/zip'
       const extension = isZip ? 'zip' : format

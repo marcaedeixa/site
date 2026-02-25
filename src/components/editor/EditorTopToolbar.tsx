@@ -463,12 +463,27 @@ export function EditorTopToolbar({
                 Exportar JSON
               </button>
               <button
-                onClick={() => handleExport('svg')}
+                onClick={() => handleExport('svg', currentSceneIndex)}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
               >
                 <Download className="mr-2 h-4 w-4" />
-                Exportar SVG
+                Exportar SVG (Cena Atual)
               </button>
+              {scenes.length > 1 && scenes.map((scene, index) => (
+                <button
+                  key={scene.id}
+                  onClick={() => handleExport('svg', index)}
+                  className="w-full px-6 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                >
+                  <div className="flex items-center">
+                    <ChevronRight className="mr-2 h-3 w-3" />
+                    {scene.name} (.svg)
+                  </div>
+                  {index === currentSceneIndex && (
+                    <span className="text-xs text-gray-400">(atual)</span>
+                  )}
+                </button>
+              ))}
               <div className="border-t border-gray-200 my-1"></div>
               <div className="px-3 py-2 text-xs font-medium text-gray-500">Exportar PNG</div>
               <button

@@ -263,14 +263,13 @@ export function EditorBottomBar() {
 
       {/* Área expandida com lista de cenas */}
       {isExpanded && (
-        <div className="p-4 border-t border-gray-100">
-          <div className="max-h-72 overflow-y-auto pr-1">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="p-3 border-t border-gray-100">
+          <div className="overflow-x-auto pb-2 pt-1">
+            <div className="flex gap-2 min-w-0">
               {scenes.length === 0 ? (
-                <div className="col-span-full text-center py-8">
-                  <Film className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                  <p className="text-gray-500 text-sm mb-1">Nenhuma cena criada ainda</p>
-                  <p className="text-xs text-gray-400">Clique em "Nova Cena" para começar</p>
+                <div className="flex-1 text-center py-6">
+                  <Film className="h-6 w-6 mx-auto mb-1 text-gray-400" />
+                  <p className="text-gray-500 text-xs">Nenhuma cena criada</p>
                 </div>
               ) : (
                 scenes.map((scene, index) => (
@@ -282,7 +281,7 @@ export function EditorBottomBar() {
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, index)}
                     onDragEnd={handleDragEnd}
-                    className={`w-full transition-all cursor-pointer ${
+                    className={`min-w-[140px] max-w-[160px] flex-shrink-0 transition-all cursor-pointer ${
                       index === currentSceneIndex 
                         ? 'ring-2 ring-blue-500 bg-blue-50' 
                         : 'hover:shadow-md'
@@ -295,8 +294,8 @@ export function EditorBottomBar() {
                     }`}
                     onClick={() => handleLoadScene(index)}
                   >
-                    <CardContent className="p-3">
-                      <div className="space-y-2">
+                    <CardContent className="p-2">
+                      <div className="space-y-1">
                         {/* Nome da Cena */}
                         <div className="flex items-center justify-between">
                           {editingSceneIndex === index ? (
@@ -329,7 +328,7 @@ export function EditorBottomBar() {
                             </div>
                           ) : (
                             <h4 
-                              className="font-medium text-gray-900 truncate flex-1 cursor-pointer text-sm"
+                              className="font-medium text-gray-900 truncate flex-1 cursor-pointer text-xs"
                               onDoubleClick={() => handleStartEdit(index, scene.name)}
                               title="Clique duplo para editar"
                             >
@@ -339,7 +338,7 @@ export function EditorBottomBar() {
                         </div>
 
                         {/* Informações da Cena */}
-                        <div className="flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center justify-between text-[10px] text-gray-500">
                           <span>{scene.elements.length} elementos</span>
                           <div className="flex items-center gap-1">
                             <Button
