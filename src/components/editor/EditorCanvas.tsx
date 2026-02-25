@@ -2120,6 +2120,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             ctx.save()
             ctx.translate((element.x ?? 0) - pb.x, (element.y ?? 0) - pb.y)
             ctx.scale(sx, sy)
+            if (element.fillColor && element.fillColor !== 'transparent') {
+              ctx.fillStyle = element.fillColor
+              ctx.fill(path2D)
+            }
             ctx.stroke(path2D)
             ctx.restore()
             break
