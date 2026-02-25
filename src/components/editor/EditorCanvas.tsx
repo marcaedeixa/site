@@ -299,6 +299,18 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     return Math.max(lineHeight, totalLines * lineHeight)
   }, [measureTextWidth])
 
+  const getEffectiveTextboxHeight = useCallback((element: Pick<Element, 'type' | 'text' | 'textBoxConfig' | 'fontSize' | 'width' | 'height'>) => {
+    if (element.type !== 'textbox') {
+      return element.height ?? 0
+    }
+    const fontSize = element.fontSize ?? 16
+    const width = Math.max(1, element.width ?? 300)
+    const text = element.text ?? element.textBoxConfig?.fullText ?? ''
+    const contentHeight = computeWrappedTextHeight(text, fontSize, width)
+    const verticalPadding = 16
+    return Math.max(element.height ?? 0, contentHeight + verticalPadding)
+  }, [computeWrappedTextHeight])
+
   const openTextEditor = useCallback((element: Element) => {
     setTextEditor({
       elementId: element.id,
@@ -596,7 +608,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   // Normalize element bounds, handling negative widths/heights (e.g. lines drawn right-to-left)
   const getElementBounds = useCallback((element: Element) => {
     const width = element.width ?? 0
-    const height = element.height ?? 0
+    const height = element.type === 'textbox'
+      ? getEffectiveTextboxHeight(element)
+      : (element.height ?? 0)
 
     const minX = Math.min(element.x, element.x + width)
     const maxX = Math.max(element.x + width, element.x)
@@ -611,7 +625,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       width: maxX - minX,
       height: maxY - minY
     }
-  }, [])
+  }, [getEffectiveTextboxHeight])
 
   // Check if point is inside element
   const isPointInElement = useCallback((point: Point, element: Element): boolean => {
@@ -692,8 +706,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         return point.x >= x && point.x <= x + textWidth && point.y >= y && point.y <= y + textHeight
 
       case 'textbox':
-        // Textbox uses defined width and height
-        return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + height
+        const effectiveTextboxHeight = getEffectiveTextboxHeight(element)
+        return point.x >= x && point.x <= x + width && point.y >= y && point.y <= y + effectiveTextboxHeight
 
       case 'path':
         if (element.pathData) {
@@ -767,7 +781,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       default:
         return false
     }
-  }, [computeTextMetrics])
+  }, [computeTextMetrics, getEffectiveTextboxHeight])
 
   // Find element at point (optimized with zIndex priority)
   const getElementAtPoint = useCallback((point: Point): Element | null => {
@@ -802,11 +816,12 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   // Get resize handles for an element
   const getResizeHandles = useCallback((element: Element) => {
-    const { x, y, width = 0, height = 0, type } = element
+    const { x, y, width = 0, type } = element
+    const height = type === 'textbox' ? getEffectiveTextboxHeight(element) : (element.height ?? 0)
     const handleSize = 8 / viewport.zoom
     const handles: { id: string, x: number, y: number, cursor: string }[] = []
 
-    if (type === 'rectangle' || type === 'text' || type === 'actor' || type === 'object') {
+    if (type === 'rectangle' || type === 'text' || type === 'textbox' || type === 'actor' || type === 'object') {
       // Corner handles
       handles.push(
         { id: 'nw', x: x - handleSize / 2, y: y - handleSize / 2, cursor: 'nw-resize' },
@@ -886,7 +901,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     return handles
-  }, [viewport.zoom])
+  }, [viewport.zoom, getEffectiveTextboxHeight])
 
   // Check if point is on a resize handle
   const getHandleAtPoint = useCallback((point: Point, element: Element): string | null => {
@@ -2408,6 +2423,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     ctx.globalAlpha = element.opacity || 1
 
     const { x = 0, y = 0, width = 0, height = 0 } = element
+    const effectiveTextboxHeight = element.type === 'textbox'
+      ? getEffectiveTextboxHeight(element as Pick<Element, 'type' | 'text' | 'textBoxConfig' | 'fontSize' | 'width' | 'height'>)
+      : height
 
     switch (element.type) {
       case 'rectangle':
@@ -2550,10 +2568,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       }
 
       case 'textbox':
-        // Draw textbox background only if explicitly set
         if (element.fillColor && element.fillColor !== 'transparent') {
           ctx.fillStyle = element.fillColor
-          ctx.fillRect(x, y, width, height)
+          ctx.fillRect(x, y, width, effectiveTextboxHeight)
         }
 
         // No border rect for textbox — strokeColor is used for text color only
@@ -2572,7 +2589,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           const textX = x + padding
           const textY = y + padding
           const textWidth = width - (padding * 2)
-          const textHeight = height - (padding * 2)
+          const textHeight = effectiveTextboxHeight - (padding * 2)
 
           let displayText = baseText
           const previewMode = element.textBoxConfig?.previewMode || 'full'
@@ -2983,6 +3000,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         case 'rectangle':
         case 'text':
         case 'textbox':
+          ctx.strokeRect(x - padding, y - padding, width + padding * 2, effectiveTextboxHeight + padding * 2)
+          break
         case 'stage':
           ctx.strokeRect(x - padding, y - padding, width + padding * 2, height + padding * 2)
           break
@@ -3060,9 +3079,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       ctx.setLineDash([5 / viewport.zoom, 5 / viewport.zoom])
 
       switch (element.type) {
+        case 'textbox':
+          ctx.strokeRect(x - 2, y - 2, width + 4, effectiveTextboxHeight + 4)
+          break
         case 'rectangle':
         case 'text':
-        case 'textbox':
           ctx.strokeRect(x - 2, y - 2, width + 4, height + 4)
           break
         case 'stage':
