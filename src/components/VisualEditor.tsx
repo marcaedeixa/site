@@ -224,40 +224,48 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
   const handleSubtractElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
-    if (shapeElements.length !== 2) {
-      alert('Selecione exatamente duas formas geométricas para esta operação.')
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas para esta operação.')
       return
     }
 
     try {
       const sorted = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
-      const [first, second] = sorted
-      const shape1 = convertElementToShape(first)
-      const shape2 = convertElementToShape(second)
-
-      if (!shape1 || !shape2) {
+      const reference = sorted[0]
+      const shapes = sorted.map(convertElementToShape).filter(Boolean) as any[]
+      if (shapes.length < 2) {
         console.error('Não foi possível converter elementos para shapes')
         return
       }
 
-      const result = await performBooleanOperation(shape1, shape2, 'subtract')
+      let result = await performBooleanOperation(shapes[0], shapes[1], 'subtract')
+      for (let i = 2; i < shapes.length && result.success && result.svgPath; i++) {
+        const tempShape = {
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width,
+          height: result.bounds?.height,
+          path: result.svgPath,
+          pathBounds: result.bounds
+        } as any
+        result = await performBooleanOperation(tempShape, shapes[i], 'subtract')
+      }
 
       if (result.success && result.svgPath) {
-        // Use batch to create single history entry
         startBatch()
-        deleteElements([first.id, second.id])
-
+        deleteElements(sorted.map(el => el.id))
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
           y: result.bounds?.y || 0,
           width: result.bounds?.width || 100,
           height: result.bounds?.height || 100,
-          strokeColor: first.strokeColor,
-          fillColor: first.fillColor,
-          strokeWidth: first.strokeWidth,
-          opacity: first.opacity,
-          zIndex: Math.max(first.zIndex || 0, second.zIndex || 0),
+          strokeColor: reference.strokeColor,
+          fillColor: reference.fillColor,
+          strokeWidth: reference.strokeWidth,
+          opacity: reference.opacity,
+          zIndex: Math.max(...sorted.map(el => el.zIndex || 0)),
           points: [{ x: 0, y: 0 }],
           locked: false,
           pathData: result.svgPath,
@@ -272,40 +280,48 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
   const handleIntersectElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
-    if (shapeElements.length !== 2) {
-      alert('Selecione exatamente duas formas geométricas para esta operação.')
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas para esta operação.')
       return
     }
 
     try {
       const sorted = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
-      const [first, second] = sorted
-      const shape1 = convertElementToShape(first)
-      const shape2 = convertElementToShape(second)
-
-      if (!shape1 || !shape2) {
+      const reference = sorted[0]
+      const shapes = sorted.map(convertElementToShape).filter(Boolean) as any[]
+      if (shapes.length < 2) {
         console.error('Não foi possível converter elementos para shapes')
         return
       }
 
-      const result = await performBooleanOperation(shape1, shape2, 'intersect')
+      let result = await performBooleanOperation(shapes[0], shapes[1], 'intersect')
+      for (let i = 2; i < shapes.length && result.success && result.svgPath; i++) {
+        const tempShape = {
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width,
+          height: result.bounds?.height,
+          path: result.svgPath,
+          pathBounds: result.bounds
+        } as any
+        result = await performBooleanOperation(tempShape, shapes[i], 'intersect')
+      }
 
       if (result.success && result.svgPath) {
-        // Use batch to create single history entry
         startBatch()
-        deleteElements([first.id, second.id])
-
+        deleteElements(sorted.map(el => el.id))
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
           y: result.bounds?.y || 0,
           width: result.bounds?.width || 100,
           height: result.bounds?.height || 100,
-          strokeColor: first.strokeColor,
-          fillColor: first.fillColor,
-          strokeWidth: first.strokeWidth,
-          opacity: first.opacity,
-          zIndex: Math.max(first.zIndex || 0, second.zIndex || 0),
+          strokeColor: reference.strokeColor,
+          fillColor: reference.fillColor,
+          strokeWidth: reference.strokeWidth,
+          opacity: reference.opacity,
+          zIndex: Math.max(...sorted.map(el => el.zIndex || 0)),
           points: [{ x: 0, y: 0 }],
           locked: false,
           pathData: result.svgPath,
@@ -320,40 +336,48 @@ export function VisualEditor({ projectId }: VisualEditorProps) {
 
   const handleExcludeElements = useCallback(async () => {
     const shapeElements = getSelectedShapeElements()
-    if (shapeElements.length !== 2) {
-      alert('Selecione exatamente duas formas geométricas para esta operação.')
+    if (shapeElements.length < 2) {
+      alert('Selecione pelo menos duas formas geométricas para esta operação.')
       return
     }
 
     try {
       const sorted = [...shapeElements].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
-      const [first, second] = sorted
-      const shape1 = convertElementToShape(first)
-      const shape2 = convertElementToShape(second)
-
-      if (!shape1 || !shape2) {
+      const reference = sorted[0]
+      const shapes = sorted.map(convertElementToShape).filter(Boolean) as any[]
+      if (shapes.length < 2) {
         console.error('Não foi possível converter elementos para shapes')
         return
       }
 
-      const result = await performBooleanOperation(shape1, shape2, 'exclude')
+      let result = await performBooleanOperation(shapes[0], shapes[1], 'exclude')
+      for (let i = 2; i < shapes.length && result.success && result.svgPath; i++) {
+        const tempShape = {
+          type: 'path',
+          x: result.bounds?.x || 0,
+          y: result.bounds?.y || 0,
+          width: result.bounds?.width,
+          height: result.bounds?.height,
+          path: result.svgPath,
+          pathBounds: result.bounds
+        } as any
+        result = await performBooleanOperation(tempShape, shapes[i], 'exclude')
+      }
 
       if (result.success && result.svgPath) {
-        // Use batch to create single history entry
         startBatch()
-        deleteElements([first.id, second.id])
-
+        deleteElements(sorted.map(el => el.id))
         addElement({
           type: 'path',
           x: result.bounds?.x || 0,
           y: result.bounds?.y || 0,
           width: result.bounds?.width || 100,
           height: result.bounds?.height || 100,
-          strokeColor: first.strokeColor,
-          fillColor: first.fillColor,
-          strokeWidth: first.strokeWidth,
-          opacity: first.opacity,
-          zIndex: Math.max(first.zIndex || 0, second.zIndex || 0),
+          strokeColor: reference.strokeColor,
+          fillColor: reference.fillColor,
+          strokeWidth: reference.strokeWidth,
+          opacity: reference.opacity,
+          zIndex: Math.max(...sorted.map(el => el.zIndex || 0)),
           points: [{ x: 0, y: 0 }],
           locked: false,
           pathData: result.svgPath,

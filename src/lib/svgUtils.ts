@@ -37,7 +37,7 @@ export function convertElementToShape(element: any): Shape | null {
         y: element.y,
         width: element.width,
         height: element.height,
-        radius: element.radius || Math.min(element.width || 0, element.height || 0) / 2,
+        radius: element.radius,
         rotation: element.rotation || 0
       };
     
@@ -120,16 +120,15 @@ async function createPaperPath(shape: Shape): Promise<any> {
     switch (shape.type) {
       case 'circle': {
         let path: any = null;
-        if (shape.radius) {
+        if (shape.width && shape.height) {
+          path = new paper.Path.Ellipse({
+            point: [shape.x, shape.y],
+            size: [shape.width, shape.height]
+          });
+        } else if (shape.radius) {
           path = new paper.Path.Circle({
             center: [shape.x + shape.radius, shape.y + shape.radius],
             radius: shape.radius
-          });
-        } else if (shape.width && shape.height) {
-          const radius = Math.min(shape.width, shape.height) / 2;
-          path = new paper.Path.Circle({
-            center: [shape.x + radius, shape.y + radius],
-            radius: radius
           });
         }
         if (path) {
