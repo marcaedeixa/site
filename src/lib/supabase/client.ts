@@ -1,8 +1,4 @@
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-
-// Singleton instances
-let supabaseInstance: ReturnType<typeof createSupabaseClient> | null = null
-let supabaseAdminInstance: ReturnType<typeof createSupabaseClient> | null = null
+import { createBrowserClient } from '@supabase/ssr'
 
 const FALLBACK_SUPABASE_URL = 'https://placeholder.supabase.co'
 const FALLBACK_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder'
@@ -22,36 +18,15 @@ function getClientConfig() {
 }
 
 export function createClient() {
-  if (!supabaseInstance) {
-    const { supabaseUrl, supabaseAnonKey } = getClientConfig()
-
-    supabaseInstance = createSupabaseClient(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        auth: {
-          autoRefreshToken: true,
-          persistSession: true,
-          detectSessionInUrl: true,
-          flowType: 'pkce'
-        }
-      }
-    )
-  }
-  return supabaseInstance
+  const { supabaseUrl, supabaseAnonKey } = getClientConfig()
+  // createBrowserClient do @supabase/ssr armazena sessão em cookies
+  // (acessível pelo middleware e server components) e é singleton por padrão
+  return createBrowserClient(supabaseUrl, supabaseAnonKey)
 }
 
-// Cliente administrativo com service role key (apenas para operações admin)
+// Cliente administrativo — no frontend usa anon key (mesma sessão)
+// Operações admin reais devem passar por API routes com service role key
 export function createAdminClient() {
-  if (!supabaseAdminInstance) {
-    const { supabaseUrl, supabaseAnonKey } = getClientConfig()
-
-    // No frontend, precisamos fazer as operações admin via API routes
-    // que usam a service role key no servidor
-    supabaseAdminInstance = createSupabaseClient(
-      supabaseUrl,
-      supabaseAnonKey
-    )
-  }
-  return supabaseAdminInstance
+  const { supabaseUrl, supabaseAnonKey } = getClientConfig()
+  return createBrowserClient(supabaseUrl, supabaseAnonKey)
 }
