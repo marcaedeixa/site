@@ -8,11 +8,11 @@ set -e
 echo "🔧 Injetando variáveis de ambiente no bundle..."
 
 find /app/.next -type f -name "*.js" -exec sed -i \
-  -e "s|__NEXT_PUBLIC_SUPABASE_URL__|${NEXT_PUBLIC_SUPABASE_URL}|g" \
-  -e "s|__NEXT_PUBLIC_SUPABASE_ANON_KEY__|${NEXT_PUBLIC_SUPABASE_ANON_KEY}|g" \
-  -e "s|__NEXT_PUBLIC_APP_URL__|${NEXT_PUBLIC_APP_URL}|g" \
-  -e "s|__NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY__|${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}|g" \
-  -e "s|__NEXT_PUBLIC_RECAPTCHA_SITE_KEY__|${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|g" \
+  -e "s|https://buildplaceholder.supabase.co|${NEXT_PUBLIC_SUPABASE_URL}|g" \
+  -e "s|eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.buildplaceholder|${NEXT_PUBLIC_SUPABASE_ANON_KEY}|g" \
+  -e "s|https://buildplaceholder.app|${NEXT_PUBLIC_APP_URL}|g" \
+  -e "s|pk_test_buildplaceholder|${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY}|g" \
+  -e "s|buildplaceholder_recaptcha|${NEXT_PUBLIC_RECAPTCHA_SITE_KEY}|g" \
   {} +
 
 echo "✅ Variáveis injetadas. Iniciando servidor..."
