@@ -478,8 +478,9 @@ export function EditorTopToolbar({
           </Button>
           
           {/* Export Dropdown */}
-          <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-            <div className="py-1 min-w-[200px] max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
+          <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+            <div className="py-1 min-w-[180px]">
+              {/* JSON */}
               <button
                 onClick={() => handleExport('json')}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
@@ -487,67 +488,91 @@ export function EditorTopToolbar({
                 <Download className="mr-2 h-4 w-4" />
                 Exportar JSON
               </button>
-              <button
-                onClick={() => handleExport('svg', currentSceneIndex)}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Exportar SVG (Cena Atual)
-              </button>
-              {scenes.length > 1 && scenes.map((scene, index) => (
+
+              {/* SVG - com sub-menu */}
+              <div className="relative group/svg">
                 <button
-                  key={scene.id}
-                  onClick={() => handleExport('svg', index)}
-                  className="w-full px-6 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  onClick={() => handleExport('svg', currentSceneIndex)}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
                 >
                   <div className="flex items-center">
-                    <ChevronRight className="mr-2 h-3 w-3" />
-                    {scene.name} (.svg)
-                  </div>
-                  {index === currentSceneIndex && (
-                    <span className="text-xs text-gray-400">(atual)</span>
-                  )}
-                </button>
-              ))}
-              {scenes.length > 1 && (
-                <>
-                  <div className="border-t border-gray-200 my-1"></div>
-                  <button
-                    onClick={handleExportAnimatedSVG}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
-                  >
                     <Download className="mr-2 h-4 w-4" />
-                    SVG Animado (Todas as Cenas)
-                  </button>
-                </>
-              )}
-              <div className="border-t border-gray-200 my-1"></div>
-              <div className="px-3 py-2 text-xs font-medium text-gray-500">Exportar PNG</div>
-              <button
-                onClick={() => handleExport('png')}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Projeto Completo
-              </button>
-              {scenes.map((scene, index) => (
+                    Exportar SVG
+                  </div>
+                  {scenes.length > 1 && <ChevronRight className="h-3 w-3 text-gray-400" />}
+                </button>
+                {scenes.length > 1 && (
+                  <div className="absolute top-0 left-full ml-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover/svg:opacity-100 group-hover/svg:visible transition-all duration-200 z-50">
+                    <div className="py-1 min-w-[180px] max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
+                      {scenes.map((scene, index) => (
+                        <button
+                          key={scene.id}
+                          onClick={() => handleExport('svg', index)}
+                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                        >
+                          <span>{scene.name}</span>
+                          {index === currentSceneIndex && (
+                            <span className="text-xs text-gray-400 ml-2">(atual)</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* SVG Animado */}
+              {scenes.length > 1 && (
                 <button
-                  key={scene.id}
-                  onClick={() => handleExport('png', index)}
-                  className="w-full px-6 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  onClick={handleExportAnimatedSVG}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  SVG Animado
+                </button>
+              )}
+
+              <div className="border-t border-gray-200 my-1"></div>
+
+              {/* PNG - com sub-menu */}
+              <div className="relative group/png">
+                <button
+                  onClick={() => handleExport('png')}
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
                 >
                   <div className="flex items-center">
-                    <ChevronRight className="mr-2 h-3 w-3" />
-                    {scene.name}
+                    <Download className="mr-2 h-4 w-4" />
+                    Exportar PNG
                   </div>
-                  {index === currentSceneIndex && (
-                    <span className="text-xs text-gray-400">(atual)</span>
-                  )}
+                  <ChevronRight className="h-3 w-3 text-gray-400" />
                 </button>
-              ))}
+                <div className="absolute top-0 left-full ml-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover/png:opacity-100 group-hover/png:visible transition-all duration-200 z-50">
+                  <div className="py-1 min-w-[180px] max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
+                    <button
+                      onClick={() => handleExport('png')}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
+                    >
+                      Projeto Completo
+                    </button>
+                    <div className="border-t border-gray-200 my-1"></div>
+                    {scenes.map((scene, index) => (
+                      <button
+                        key={scene.id}
+                        onClick={() => handleExport('png', index)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                      >
+                        <span>{scene.name}</span>
+                        {index === currentSceneIndex && (
+                          <span className="text-xs text-gray-400 ml-2">(atual)</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
         </div>
+      </div>
       </div>
       </div>
 
