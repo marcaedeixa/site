@@ -58,7 +58,7 @@ function AdminLoginContent() {
       return
     }
     
-    if (!recaptchaToken) {
+    if (!recaptchaToken && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
       setError('Por favor, complete a verificação reCAPTCHA')
       return
     }
@@ -171,6 +171,7 @@ function AdminLoginContent() {
               </div>
               
               {/* reCAPTCHA */}
+              {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && (
               <div className="flex justify-center py-2">
                 <ReCAPTCHA
                   ref={recaptchaRef}
@@ -180,6 +181,7 @@ function AdminLoginContent() {
                   size="normal"
                 />
               </div>
+              )}
               
               {/* Mensagem de Erro */}
               {error && (
@@ -195,7 +197,7 @@ function AdminLoginContent() {
               <Button
                 type="submit"
                 className="w-full h-11 bg-purple-600 hover:bg-purple-700 text-white font-medium"
-                disabled={loading || !recaptchaToken}
+                disabled={loading || (!recaptchaToken && !!process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY)}
               >
                 {loading ? (
                   <>

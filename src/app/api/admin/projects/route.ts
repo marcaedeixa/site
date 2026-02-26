@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Obter projetos usando service role
-    const supabaseAdmin = createClient(true) // service role
+    const supabaseAdmin = await createClient(true) // service role
     
     const { data: projects, error: projectsError } = await supabaseAdmin
       .from('projects')

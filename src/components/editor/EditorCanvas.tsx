@@ -2673,7 +2673,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ctx.scale(sx, sy)
           if (element.fillColor && element.fillColor !== 'transparent') {
             ctx.fillStyle = element.fillColor
-            ctx.fill(path2D)
+            ctx.fill(path2D, 'evenodd')
           }
           if (element.strokeColor) {
             ctx.strokeStyle = element.strokeColor

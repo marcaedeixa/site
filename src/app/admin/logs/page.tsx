@@ -166,12 +166,12 @@ export default function LogsPage() {
           id: '7',
           admin_user_id: '1',
           admin_email: 'admin@exemplo.com',
-          action: 'view_supabase_config',
-          resource: '/admin/settings/supabase',
+          action: 'view_settings',
+          resource: '/admin/settings',
           ip_address: '192.168.1.100',
           user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           status: 'success',
-          details: 'Visualização das configurações do Supabase',
+          details: 'Visualização das configurações do sistema',
           created_at: new Date(Date.now() - 2400000).toISOString()
         },
         {

@@ -7,20 +7,16 @@ import {
   Settings, 
   BarChart3, 
   Shield, 
-  Database,
   LogOut,
   RefreshCw,
   CreditCard,
   Activity,
   TrendingUp,
-  AlertTriangle,
   CheckCircle,
   Menu,
   X,
-  ArrowUpRight,
   Eye
 } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
 import { Button } from '@/components/ui/button'
@@ -58,8 +54,6 @@ export default function AdminPage() {
   const [supabaseConnected, setSupabaseConnected] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
-
   const { adminUser, signOut, loading: authLoading } = useAdminAuth()
 
   useEffect(() => {
@@ -164,17 +158,11 @@ export default function AdminPage() {
     router.push('/admin/customers')
   }
 
-  const navigateToSettings = (section: string) => {
-    router.push(`/admin/settings/${section}`)
-  }
-
   // Sidebar de navegação
   const sidebarItems = [
     { icon: BarChart3, label: 'Dashboard', href: '/admin', active: true },
     { icon: Eye, label: 'Landing Page', href: '/admin/landing' },
     { icon: Users, label: 'Clientes', href: '/admin/customers' },
-    { icon: CreditCard, label: 'Stripe', href: '/admin/stripe' },
-    { icon: Database, label: 'Supabase', href: '/admin/settings/supabase' },
     { icon: Settings, label: 'Configurações', href: '/admin/settings' },
   ]
 
@@ -471,20 +459,6 @@ export default function AdminPage() {
               </CardContent>
             </Card>
             
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => navigateToSettings('supabase')}>
-              <CardContent className="p-6">
-                <div className="flex items-center">
-                  <div className="p-3 bg-purple-100 rounded-lg">
-                    <Database className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <div className="ml-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Configurar Supabase</h3>
-                    <p className="text-sm text-gray-600">Gerenciar banco de dados</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card className="hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push('/admin/subscriptions')}>
               <CardContent className="p-6">
                 <div className="flex items-center">
