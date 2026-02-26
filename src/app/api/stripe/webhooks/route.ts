@@ -4,11 +4,87 @@ import { saveSubscriptionToDatabase, savePaymentToDatabase } from '@/lib/stripe-
 import { createClient } from '@supabase/supabase-js';
 import { headers } from 'next/headers';
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+type WebhookDatabase = {
+  public: {
+    Tables: {
+      stripe_webhook_events: {
+        Row: {
+          id: string;
+          stripe_event_id: string;
+          processed: boolean;
+        };
+        Insert: {
+          stripe_event_id: string;
+          event_type: string;
+          data: unknown;
+          processed: boolean;
+        };
+        Update: {
+          processed?: boolean;
+        };
+        Relationships: [];
+      };
+      stripe_customers: {
+        Row: {
+          id: string;
+          stripe_customer_id: string;
+          email: string | null;
+          name: string | null;
+        };
+        Insert: {
+          id?: string;
+          stripe_customer_id: string;
+          email?: string | null;
+          name?: string | null;
+        };
+        Update: {
+          email?: string | null;
+          name?: string | null;
+        };
+        Relationships: [];
+      };
+      stripe_subscriptions: {
+        Row: {
+          stripe_subscription_id: string;
+          status: string;
+          canceled_at: string | null;
+        };
+        Insert: {
+          stripe_subscription_id: string;
+          status: string;
+          canceled_at?: string | null;
+        };
+        Update: {
+          status?: string;
+          canceled_at?: string | null;
+        };
+        Relationships: [];
+      };
+    };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
+  };
+};
+
+let supabaseClient: ReturnType<typeof createClient<WebhookDatabase>> | null = null;
+
+function getSupabase() {
+  if (supabaseClient) {
+    return supabaseClient;
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Supabase is disabled: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set');
+  }
+
+  supabaseClient = createClient<WebhookDatabase>(supabaseUrl, serviceRoleKey);
+  return supabaseClient;
+}
 
 // Webhook secret (opcional): se não houver, a rota retorna 501
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -16,6 +92,8 @@ const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 // POST - Handle Stripe webhooks
 export async function POST(request: NextRequest) {
   try {
+    const supabase = getSupabase();
+
     if (!webhookSecret) {
       return NextResponse.json(
         { error: 'Stripe desabilitado: STRIPE_WEBHOOK_SECRET ausente' },
@@ -24,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.text();
-    const headersList = headers();
+    const headersList = await headers();
     const signature = headersList.get('stripe-signature');
 
     if (!signature) {
@@ -58,7 +136,7 @@ export async function POST(request: NextRequest) {
       .eq('stripe_event_id', event.id)
       .single();
 
-    if (existingEvent && existingEvent.processed) {
+    if ((existingEvent as { processed?: boolean } | null)?.processed) {
       console.log('Webhook event already processed, skipping:', event.id);
       return NextResponse.json({ received: true, skipped: true });
     }
@@ -129,6 +207,7 @@ export async function POST(request: NextRequest) {
 // Helper function to save webhook event
 async function saveWebhookEvent(event: any) {
   try {
+    const supabase = getSupabase();
     await supabase
       .from('stripe_webhook_events')
       .insert({
@@ -145,6 +224,7 @@ async function saveWebhookEvent(event: any) {
 // Helper function to mark event as processed
 async function markEventAsProcessed(eventId: string) {
   try {
+    const supabase = getSupabase();
     await supabase
       .from('stripe_webhook_events')
       .update({ processed: true })
@@ -164,6 +244,7 @@ async function handleCustomerUpdated(customer: any) {
   console.log('Customer updated:', customer.id);
   
   try {
+    const supabase = getSupabase();
     await supabase
       .from('stripe_customers')
       .update({
@@ -180,6 +261,7 @@ async function handleCustomerDeleted(customer: any) {
   console.log('Customer deleted:', customer.id);
   
   try {
+    const supabase = getSupabase();
     await supabase
       .from('stripe_customers')
       .delete()
@@ -193,6 +275,7 @@ async function handleSubscriptionCreated(subscription: any) {
   console.log('Subscription created:', subscription.id);
   
   try {
+    const supabase = getSupabase();
     // Get customer from database
     const { data: customer } = await supabase
       .from('stripe_customers')
@@ -212,6 +295,7 @@ async function handleSubscriptionUpdated(subscription: any) {
   console.log('Subscription updated:', subscription.id);
   
   try {
+    const supabase = getSupabase();
     // Get customer from database
     const { data: customer } = await supabase
       .from('stripe_customers')
@@ -231,11 +315,12 @@ async function handleSubscriptionDeleted(subscription: any) {
   console.log('Subscription deleted:', subscription.id);
   
   try {
+    const supabase = getSupabase();
     await supabase
       .from('stripe_subscriptions')
       .update({
         status: 'canceled',
-        canceled_at: new Date()
+        canceled_at: new Date().toISOString()
       })
       .eq('stripe_subscription_id', subscription.id);
   } catch (error) {
@@ -260,6 +345,7 @@ async function handleInvoicePaymentFailed(invoice: any) {
   console.log('Invoice payment failed:', invoice.id);
   
   try {
+    const supabase = getSupabase();
     // Update subscription status
     if (invoice.subscription) {
       await supabase
@@ -276,6 +362,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: any) {
   console.log('Payment intent succeeded:', paymentIntent.id);
   
   try {
+    const supabase = getSupabase();
     // Get customer from database
     const { data: customer } = await supabase
       .from('stripe_customers')
@@ -295,6 +382,7 @@ async function handlePaymentIntentFailed(paymentIntent: any) {
   console.log('Payment intent failed:', paymentIntent.id);
   
   try {
+    const supabase = getSupabase();
     // Get customer from database
     const { data: customer } = await supabase
       .from('stripe_customers')
