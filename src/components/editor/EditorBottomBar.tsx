@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -55,11 +55,21 @@ export function EditorBottomBar() {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null)
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   // Atualizar input do intervalo quando o valor do store mudar
   useEffect(() => {
     setIntervalInput(slideshowInterval / 1000)
   }, [slideshowInterval])
 
+  // Auto-scroll active scene card into view
+  useEffect(() => {
+    if (scrollContainerRef.current && scenes.length > 0) {
+      const activeCard = scrollContainerRef.current.children[currentSceneIndex] as HTMLElement
+      if (activeCard) {
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+      }
+    }
+  }, [currentSceneIndex, scenes.length])
   const handleAddScene = () => {
     addScene(undefined, userPlan.limits.maxScenesPerProject)
   }
@@ -267,9 +277,9 @@ export function EditorBottomBar() {
 
       {/* Área expandida com lista de cenas */}
       {isExpanded && (
-        <div className="p-3 border-t border-gray-100">
-          <div className="overflow-x-auto pb-2 pt-1">
-            <div className="flex gap-2 min-w-0">
+        <div className="p-3 border-t border-gray-100 overflow-hidden">
+          <div className="overflow-x-auto pb-2 pt-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
+            <div ref={scrollContainerRef} className="flex gap-2 min-w-0">
               {scenes.length === 0 ? (
                 <div className="flex-1 text-center py-6">
                   <Film className="h-6 w-6 mx-auto mb-1 text-gray-400" />

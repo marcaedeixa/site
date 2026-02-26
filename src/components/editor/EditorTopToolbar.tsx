@@ -479,7 +479,7 @@ export function EditorTopToolbar({
           
           {/* Export Dropdown */}
           <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-            <div className="py-1 min-w-[200px]">
+            <div className="py-1 min-w-[200px] max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
               <button
                 onClick={() => handleExport('json')}
                 className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
