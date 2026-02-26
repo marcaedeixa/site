@@ -29,8 +29,31 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Deploy on Dockploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This repository includes a production Docker setup for Dockploy:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `Dockerfile` (Next.js standalone runtime)
+- `.dockerignore` (keeps image lean and excludes local sensitive files)
+- `docker-compose.dockploy.yml` (ready service definition for Dockploy)
+
+### Environment variables required
+
+Set these on Dockploy before starting the container:
+
+- `NEXT_PUBLIC_APP_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+- `STRIPE_SECRET_KEY`
+- `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` (optional for admin captcha)
+- `RECAPTCHA_SECRET_KEY` (optional for admin captcha)
+
+### Local container test
+
+```bash
+docker compose -f docker-compose.dockploy.yml up --build
+```
+
+App should be available at `http://localhost:3000`.

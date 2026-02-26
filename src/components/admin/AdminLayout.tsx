@@ -7,7 +7,6 @@ import {
   Settings, 
   BarChart3, 
   Shield, 
-  Database,
   LogOut,
   RefreshCw,
   CreditCard,
@@ -51,9 +50,7 @@ export default function AdminLayout({
   const sidebarItems = [
     { icon: BarChart3, label: 'Dashboard', href: '/admin', active: currentPath === '/admin' },
     { icon: Users, label: 'Clientes', href: '/admin/customers', active: currentPath === '/admin/customers' },
-    { icon: CreditCard, label: 'Stripe', href: '/admin/stripe', active: currentPath === '/admin/stripe' },
     { icon: CreditCard, label: 'Assinaturas', href: '/admin/subscriptions', active: currentPath === '/admin/subscriptions' },
-    { icon: Database, label: 'Supabase', href: '/admin/settings/supabase', active: currentPath === '/admin/settings/supabase' },
     { icon: Settings, label: 'Configurações', href: '/admin/settings', active: currentPath === '/admin/settings' },
   ]
 

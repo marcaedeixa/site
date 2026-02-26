@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import bcrypt from 'bcryptjs'
 
 // Função para criar cliente Supabase com service role
@@ -14,13 +16,28 @@ function getSupabaseAdmin() {
 }
 
 // Função para criar cliente Supabase normal
-function getSupabase() {
+async function getSupabase() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error('Supabase configuration missing')
   }
-  return createClient(
+
+  const cookieStore = await cookies()
+
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options)
+          })
+        }
+      }
+    }
   )
 }
 
@@ -28,19 +45,21 @@ export async function POST(request: NextRequest) {
   try {
     const { email, password, recaptchaToken } = await request.json()
 
-    // Verificar reCAPTCHA
-    const recaptchaResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
-    })
+    // Verificar reCAPTCHA (skip in dev without key)
+    if (process.env.RECAPTCHA_SECRET_KEY) {
+      const recaptchaResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
+      })
 
-    const recaptchaData = await recaptchaResponse.json()
-    if (!recaptchaData.success) {
-      return NextResponse.json(
-        { error: 'Falha na verificação do reCAPTCHA' },
-        { status: 400 }
-      )
+      const recaptchaData = await recaptchaResponse.json()
+      if (!recaptchaData.success) {
+        return NextResponse.json(
+          { error: 'Falha na verificação do reCAPTCHA' },
+          { status: 400 }
+        )
+      }
     }
 
     // Buscar usuário admin usando service role
@@ -97,11 +116,10 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', adminUserData.id)
 
-    // Criar sessão temporária no Supabase Auth
-    const tempPassword = `temp_${adminUserData.id}_${Date.now()}`
+    const tempPassword = `Adm!${adminUserData.id.replace(/-/g, '').slice(0, 12)}#Session2026`
     
     // Tentar fazer login primeiro (caso o usuário já exista no auth)
-    const supabase = getSupabase()
+    const supabase = await getSupabase()
     let authData
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: adminUserData.email,
@@ -109,20 +127,79 @@ export async function POST(request: NextRequest) {
     })
 
     if (signInError) {
-      // Se não conseguir fazer login, criar usuário no auth
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-        email: adminUserData.email,
-        password: tempPassword
+      const { data: userListData, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers({
+        page: 1,
+        perPage: 200
       })
 
-      if (signUpError) {
-        console.error('Erro ao criar usuário no auth:', signUpError)
+      if (listUsersError) {
+        console.error('Erro ao listar usuários do auth:', listUsersError)
         return NextResponse.json(
           { error: 'Erro interno do servidor' },
           { status: 500 }
         )
       }
-      authData = signUpData
+
+      const existingAuthUser = userListData.users.find(
+        (user) => user.email?.toLowerCase() === adminUserData.email.toLowerCase()
+      )
+
+      if (existingAuthUser) {
+        const { error: updateAuthError } = await supabaseAdmin.auth.admin.updateUserById(
+          existingAuthUser.id,
+          {
+            password: tempPassword,
+            email_confirm: true,
+            user_metadata: {
+              admin_id: adminUserData.id,
+              role: adminUserData.role,
+              name: adminUserData.name
+            }
+          }
+        )
+
+        if (updateAuthError) {
+          console.error('Erro ao atualizar usuário admin no auth:', updateAuthError)
+          return NextResponse.json(
+            { error: 'Erro interno do servidor' },
+            { status: 500 }
+          )
+        }
+      } else {
+        const { error: createAuthError } = await supabaseAdmin.auth.admin.createUser({
+          email: adminUserData.email,
+          password: tempPassword,
+          email_confirm: true,
+          user_metadata: {
+            admin_id: adminUserData.id,
+            role: adminUserData.role,
+            name: adminUserData.name
+          }
+        })
+
+        if (createAuthError) {
+          console.error('Erro ao criar usuário admin no auth:', createAuthError)
+          return NextResponse.json(
+            { error: 'Erro interno do servidor' },
+            { status: 500 }
+          )
+        }
+      }
+
+      const { data: retrySignInData, error: retrySignInError } = await supabase.auth.signInWithPassword({
+        email: adminUserData.email,
+        password: tempPassword
+      })
+
+      if (retrySignInError) {
+        console.error('Erro ao autenticar admin no auth:', retrySignInError)
+        return NextResponse.json(
+          { error: 'Erro interno do servidor' },
+          { status: 500 }
+        )
+      }
+
+      authData = retrySignInData
     } else {
       authData = signInData
     }

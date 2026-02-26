@@ -365,6 +365,7 @@ export const FullscreenSlideshow = () => {
                 d={el.pathData}
                 transform={`translate(${translateX} ${translateY}) scale(${scaleX} ${scaleY})`}
                 fill={el.fillColor && el.fillColor !== 'transparent' ? el.fillColor : 'none'}
+                fillRule="evenodd"
                 stroke={el.strokeColor || '#000'}
                 strokeWidth={el.strokeWidth || 2}
                 opacity={el.opacity ?? 1}

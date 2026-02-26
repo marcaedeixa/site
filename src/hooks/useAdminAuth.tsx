@@ -107,7 +107,15 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
       // Definir sessão no Supabase Auth
       if (data.session) {
-        await supabase.auth.setSession(data.session)
+        await Promise.race([
+          supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token
+          }),
+          new Promise((resolve) => {
+            setTimeout(resolve, 2000)
+          })
+        ])
       }
 
       setAdminUser(data.user)

@@ -1,3 +1,4 @@
+import { PLAN_LIMITS } from '@/lib/plan-config'
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 
@@ -1104,8 +1105,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
 
     // Check scene limit
-    if (maxScenes !== undefined && scenes.length >= maxScenes) {
-      alert(`Limite máximo de ${maxScenes} cenas por projeto atingido.`)
+    // Check scene limit — always enforce, using free plan as absolute ceiling if maxScenes not provided
+    const effectiveMax = maxScenes ?? PLAN_LIMITS.free.maxScenesPerProject
+    if (scenes.length >= effectiveMax) {
+      alert(`Limite máximo de ${effectiveMax} cenas por projeto atingido.`)
       return
     }
 
@@ -1130,8 +1133,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (index < 0 || index >= scenes.length) return
 
     // Check scene limit
-    if (maxScenes !== undefined && scenes.length >= maxScenes) {
-      alert(`Limite máximo de ${maxScenes} cenas por projeto atingido.`)
+    // Check scene limit — always enforce, using free plan as absolute ceiling if maxScenes not provided
+    const effectiveMax = maxScenes ?? PLAN_LIMITS.free.maxScenesPerProject
+    if (scenes.length >= effectiveMax) {
+      alert(`Limite máximo de ${effectiveMax} cenas por projeto atingido.`)
       return
     }
 

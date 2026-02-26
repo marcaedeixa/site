@@ -27,22 +27,27 @@ export async function GET(request: NextRequest) {
     }
 
     // Obter usuários usando service role
-    const supabaseAdmin = createClient(true) // service role
+    const supabaseAdmin = await createClient(true) // service role
     
-    const { data: users, error: usersError } = await supabaseAdmin
-      .from('auth.users')
-      .select('id, email, created_at, last_sign_in_at')
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+    const page = Math.floor(offset / limit) + 1
+
+    const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
+      page,
+      perPage: limit
+    })
     
     if (usersError) {
       throw usersError
     }
 
-    // Contar total de usuários
-    const { count: totalCount } = await supabaseAdmin
-      .from('auth.users')
-      .select('*', { count: 'exact', head: true })
+    const users = (usersData?.users || []).map((entry) => ({
+      id: entry.id,
+      email: entry.email,
+      created_at: entry.created_at,
+      last_sign_in_at: entry.last_sign_in_at
+    }))
+
+    const totalCount = usersData?.total ?? 0
 
     return NextResponse.json({
       users: users || [],

@@ -89,7 +89,7 @@ export async function deleteProjectData(projectId: string): Promise<void> {
 
 export async function exportProjectData(
   projectId: string,
-  format: 'json' | 'svg' | 'png',
+  format: 'json' | 'svg' | 'png' | 'animated-svg',
   sceneIndex?: number,
   projectDataOverride?: ProjectData
 ): Promise<string | Blob> {
@@ -137,7 +137,10 @@ export async function exportProjectData(
         return await exportAllScenesAsZip(data)
       }
       return generatePNG(elementsToExport, activeStageConfig)
-    
+
+    case 'animated-svg':
+      return generateAnimatedSVG(data)
+
     default:
       throw new Error('Formato não suportado')
   }
@@ -590,7 +593,7 @@ function generateSVG(elements: Element[], stageConfig: StageConfig | null): stri
       case 'path':
       case 'pen': {
         if (element.pathData) {
-          svg += `<path d="${element.pathData}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
+          svg += `<path d="${element.pathData}" fill="${fill}" fill-rule="evenodd" stroke="${stroke}" stroke-width="${strokeWidth}" opacity="${opacity}" />`
         } else if (element.points && element.points.length > 0) {
           const pathData = element.points
             .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
@@ -863,7 +866,7 @@ function generatePNG(elements: Element[], stageConfig: StageConfig | null): Prom
           if (element.pathData) {
             const path = new Path2D(element.pathData)
             if (normalizedFill !== 'none') {
-              ctx.fill(path)
+              ctx.fill(path, 'evenodd')
             }
             if (strokeWidth > 0 && normalizedStroke !== 'none') {
               ctx.stroke(path)
@@ -1010,6 +1013,94 @@ async function exportAllScenesAsSvgZip(projectData: ProjectData): Promise<Blob> 
 
   const zipped = zipSync(files, { level: 6 })
   return new Blob([zipped], { type: 'application/zip' })
+}
+
+function generateAnimatedSVG(projectData: ProjectData, intervalMs: number = 3000): string {
+  const scenes = projectData.scenes ?? []
+
+  if (scenes.length === 0) {
+    return generateSVG(projectData.elements ?? [], projectData.stageConfig ?? null)
+  }
+
+  if (scenes.length === 1) {
+    const scene = scenes[0]
+    return generateSVG(scene.elements ?? [], scene.stageConfig ?? projectData.stageConfig ?? null)
+  }
+
+  const sceneData = scenes.map(scene => ({
+    elements: scene.elements ?? [],
+    stageConfig: scene.stageConfig ?? projectData.stageConfig ?? null,
+  }))
+
+  const unifiedBounds: Bounds = {
+    minX: Infinity,
+    minY: Infinity,
+    maxX: -Infinity,
+    maxY: -Infinity,
+  }
+
+  sceneData.forEach(({ elements, stageConfig }) => {
+    const sceneBounds = calculateSceneBounds(elements, stageConfig)
+    extendBounds(
+      unifiedBounds,
+      sceneBounds.minX,
+      sceneBounds.minY,
+      sceneBounds.maxX,
+      sceneBounds.maxY,
+    )
+  })
+
+  const bounds = sanitizeBounds(unifiedBounds)
+  const padding = 20
+  const viewBoxX = bounds.minX - padding
+  const viewBoxY = bounds.minY - padding
+  const viewBoxWidth = bounds.maxX - bounds.minX + padding * 2
+  const viewBoxHeight = bounds.maxY - bounds.minY + padding * 2
+
+  const intervalSeconds = Math.max(0.1, intervalMs / 1000)
+  const sceneCount = sceneData.length
+  const totalDurationSeconds = intervalSeconds * sceneCount
+
+  const epsilon = 0.001 / totalDurationSeconds
+  const groups = sceneData.map(({ elements, stageConfig }, index) => {
+    const sceneSvg = generateSVG(elements, stageConfig)
+    const innerMatch = sceneSvg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i)
+    const innerContent = innerMatch ? innerMatch[1] : ''
+
+    const startFraction = index / sceneCount
+    const endFraction = (index + 1) / sceneCount
+
+    // Build keyTimes/values avoiding duplicate 0 or 1 entries
+    const kt: number[] = []
+    const vals: string[] = []
+
+    if (startFraction > 0) {
+      kt.push(0)
+      vals.push('hidden')
+      kt.push(Math.max(startFraction - epsilon, 0))
+      vals.push('hidden')
+    }
+
+    kt.push(startFraction)
+    vals.push('visible')
+    kt.push(endFraction)
+    vals.push('visible')
+
+    if (endFraction < 1) {
+      kt.push(Math.min(endFraction + epsilon, 1))
+      vals.push('hidden')
+      kt.push(1)
+      vals.push('hidden')
+    }
+
+    const keyTimes = kt.join(';')
+    const values = vals.join(';')
+    const initialVisibility = index === 0 ? 'visible' : 'hidden'
+
+    return `<g id="scene-${index}" visibility="${initialVisibility}">${innerContent}<animate attributeName="visibility" dur="${totalDurationSeconds}s" repeatCount="indefinite" values="${values}" keyTimes="${keyTimes}" /></g>`
+  })
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}">${groups.join('')}</svg>`
 }
 
 function drawStageOnContext(ctx: CanvasRenderingContext2D, stageConfig: StageConfig) {

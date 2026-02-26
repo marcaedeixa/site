@@ -272,6 +272,31 @@ export function EditorTopToolbar({
     }
   }
 
+  const handleExportAnimatedSVG = async () => {
+    try {
+      const projectId = window.location.pathname.split('/').pop()
+      if (!projectId) return
+
+      await Promise.resolve(onSave())
+      const projectData = getProjectDataSnapshot()
+      const data = await exportProjectData(projectId, 'animated-svg', undefined, projectData)
+
+      if (typeof data === 'string') {
+        const blob = new Blob([data], { type: 'image/svg+xml' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'projeto-animado.svg'
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+
+      setShowExportDropdown(false)
+    } catch (error) {
+      console.error('Erro ao exportar SVG animado:', error)
+    }
+  }
+
   return (
     <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-2 md:gap-4 justify-between flex-wrap">
       {/* Controles principais */}
@@ -484,6 +509,18 @@ export function EditorTopToolbar({
                   )}
                 </button>
               ))}
+              {scenes.length > 1 && (
+                <>
+                  <div className="border-t border-gray-200 my-1"></div>
+                  <button
+                    onClick={handleExportAnimatedSVG}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    SVG Animado (Todas as Cenas)
+                  </button>
+                </>
+              )}
               <div className="border-t border-gray-200 my-1"></div>
               <div className="px-3 py-2 text-xs font-medium text-gray-500">Exportar PNG</div>
               <button
