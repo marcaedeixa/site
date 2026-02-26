@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Criar cliente Supabase com service role para operações admin
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error('Supabase env vars are missing')
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey)
+}
 
 // GET - Buscar todo o conteúdo da landing page
 export async function GET(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     const { searchParams } = new URL(request.url)
     const section = searchParams.get('section')
 
@@ -61,6 +67,7 @@ export async function GET(request: NextRequest) {
 // PUT - Atualizar conteúdo de uma seção
 export async function PUT(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     const body = await request.json()
     const { section, content, updated_by } = body
 
@@ -111,6 +118,7 @@ export async function PUT(request: NextRequest) {
 // POST - Criar nova seção (geralmente não usado, mas disponível)
 export async function POST(request: NextRequest) {
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     const body = await request.json()
     const { section, content, updated_by } = body
 
@@ -153,4 +161,3 @@ export async function POST(request: NextRequest) {
     )
   }
 }
-
