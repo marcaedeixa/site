@@ -25,7 +25,7 @@ import {
 import { useEditorStore } from '@/hooks/useEditorStore'
 import { exportProjectData } from '@/lib/projectData'
 import { getProjectDataSnapshot } from '@/lib/editorSnapshot'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ActorModal } from './ActorModal'
 import { ObjectModal } from './ObjectModal'
 import { supabase } from '@/lib/supabase'
@@ -67,7 +67,35 @@ export function EditorTopToolbar({
   
   // Estado para controlar o dropdown de exportação
   const [showExportDropdown, setShowExportDropdown] = useState(false)
+  const [svgSubOpen, setSvgSubOpen] = useState(false)
+  const [pngSubOpen, setPngSubOpen] = useState(false)
+  const exportDropdownRef = useRef<HTMLDivElement>(null)
   
+  // Fechar dropdown de exportação ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target as Node)) {
+        setShowExportDropdown(false)
+        setSvgSubOpen(false)
+        setPngSubOpen(false)
+      }
+    }
+    if (showExportDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('touchstart', handleClickOutside as unknown as EventListener)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('touchstart', handleClickOutside as unknown as EventListener)
+    }
+  }, [showExportDropdown])
+
+  const closeExportMenu = () => {
+    setShowExportDropdown(false)
+    setSvgSubOpen(false)
+    setPngSubOpen(false)
+  }
+
   // Obter cenas do store
   const { scenes, currentSceneIndex } = useEditorStore()
   
@@ -467,112 +495,132 @@ export function EditorTopToolbar({
           <Save className="h-4 w-4" />
         </Button>
         
-        <div className="relative group">
+        <div className="relative" ref={exportDropdownRef}>
           <Button
             variant="ghost"
             size="sm"
             title="Exportar"
             className="h-8 w-8 p-0"
+            onClick={() => {
+              setShowExportDropdown(prev => !prev)
+              setSvgSubOpen(false)
+              setPngSubOpen(false)
+            }}
           >
             <Download className="h-4 w-4" />
           </Button>
           
           {/* Export Dropdown */}
-          <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-            <div className="py-1 min-w-[180px]">
-              {/* JSON */}
-              <button
-                onClick={() => handleExport('json')}
-                className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Exportar JSON
-              </button>
-
-              {/* SVG - com sub-menu */}
-              <div className="relative group/svg">
+          {showExportDropdown && (
+            <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-50">
+              <div className="py-1 min-w-[180px]">
+                {/* JSON */}
                 <button
-                  onClick={() => handleExport('svg', currentSceneIndex)}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
-                >
-                  <div className="flex items-center">
-                    <Download className="mr-2 h-4 w-4" />
-                    Exportar SVG
-                  </div>
-                  {scenes.length > 1 && <ChevronRight className="h-3 w-3 text-gray-400" />}
-                </button>
-                {scenes.length > 1 && (
-                  <div className="absolute top-0 left-full ml-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover/svg:opacity-100 group-hover/svg:visible transition-all duration-200 z-50">
-                    <div className="py-1 min-w-[180px] max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
-                      {scenes.map((scene, index) => (
-                        <button
-                          key={scene.id}
-                          onClick={() => handleExport('svg', index)}
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
-                        >
-                          <span>{scene.name}</span>
-                          {index === currentSceneIndex && (
-                            <span className="text-xs text-gray-400 ml-2">(atual)</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* SVG Animado */}
-              {scenes.length > 1 && (
-                <button
-                  onClick={handleExportAnimatedSVG}
+                  onClick={() => { handleExport('json'); closeExportMenu() }}
                   className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
                 >
                   <Download className="mr-2 h-4 w-4" />
-                  SVG Animado
+                  Exportar JSON
                 </button>
-              )}
 
-              <div className="border-t border-gray-200 my-1"></div>
+                {/* SVG - com sub-menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      if (scenes.length > 1) {
+                        setSvgSubOpen(prev => !prev)
+                        setPngSubOpen(false)
+                      } else {
+                        handleExport('svg', currentSceneIndex)
+                        closeExportMenu()
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <Download className="mr-2 h-4 w-4" />
+                      Exportar SVG
+                    </div>
+                    {scenes.length > 1 && <ChevronRight className={`h-3 w-3 text-gray-400 transition-transform ${svgSubOpen ? 'rotate-90' : ''}`} />}
+                  </button>
+                  {scenes.length > 1 && svgSubOpen && (
+                    <div className="border-l-2 border-gray-200 ml-4">
+                      <div className="py-1 max-h-[40vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
+                        {scenes.map((scene, index) => (
+                          <button
+                            key={scene.id}
+                            onClick={() => { handleExport('svg', index); closeExportMenu() }}
+                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 transition-colors flex items-center justify-between"
+                          >
+                            <span>{scene.name}</span>
+                            {index === currentSceneIndex && (
+                              <span className="text-xs text-gray-400 ml-2">(atual)</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
-              {/* PNG - com sub-menu */}
-              <div className="relative group/png">
-                <button
-                  onClick={() => handleExport('png')}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
-                >
-                  <div className="flex items-center">
+                {/* SVG Animado */}
+                {scenes.length > 1 && (
+                  <button
+                    onClick={() => { handleExportAnimatedSVG(); closeExportMenu() }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
+                  >
                     <Download className="mr-2 h-4 w-4" />
-                    Exportar PNG
-                  </div>
-                  <ChevronRight className="h-3 w-3 text-gray-400" />
-                </button>
-                <div className="absolute top-0 left-full ml-1 bg-white border border-gray-200 rounded-md shadow-lg opacity-0 invisible group-hover/png:opacity-100 group-hover/png:visible transition-all duration-200 z-50">
-                  <div className="py-1 min-w-[180px] max-h-[50vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-400">
-                    <button
-                      onClick={() => handleExport('png')}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center"
-                    >
-                      Projeto Completo
-                    </button>
-                    <div className="border-t border-gray-200 my-1"></div>
-                    {scenes.map((scene, index) => (
-                      <button
-                        key={scene.id}
-                        onClick={() => handleExport('png', index)}
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
-                      >
-                        <span>{scene.name}</span>
-                        {index === currentSceneIndex && (
-                          <span className="text-xs text-gray-400 ml-2">(atual)</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                    SVG Animado
+                  </button>
+                )}
+
+                <div className="border-t border-gray-200 my-1"></div>
+
+                {/* PNG - com sub-menu */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setPngSubOpen(prev => !prev)
+                      setSvgSubOpen(false)
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-center">
+                      <Download className="mr-2 h-4 w-4" />
+                      Exportar PNG
+                    </div>
+                    <ChevronRight className={`h-3 w-3 text-gray-400 transition-transform ${pngSubOpen ? 'rotate-90' : ''}`} />
+                  </button>
+                  {pngSubOpen && (
+                    <div className="border-l-2 border-gray-200 ml-4">
+                      <div className="py-1 max-h-[40vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 [&::-webkit-scrollbar-thumb]:rounded-full">
+                        <button
+                          onClick={() => { handleExport('png'); closeExportMenu() }}
+                          className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 transition-colors flex items-center"
+                        >
+                          Projeto Completo
+                        </button>
+                        <div className="border-t border-gray-200 my-1"></div>
+                        {scenes.map((scene, index) => (
+                          <button
+                            key={scene.id}
+                            onClick={() => { handleExport('png', index); closeExportMenu() }}
+                            className="w-full px-3 py-1.5 text-left text-xs hover:bg-gray-100 transition-colors flex items-center justify-between"
+                          >
+                            <span>{scene.name}</span>
+                            {index === currentSceneIndex && (
+                              <span className="text-xs text-gray-400 ml-2">(atual)</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
+          )}
         </div>
-      </div>
       </div>
       </div>
 

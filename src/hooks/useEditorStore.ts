@@ -507,7 +507,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   duplicateElements: (ids) => {
     const { elements } = get()
-    const elementsToDuplicate = elements.filter((el) => ids.includes(el.id))
+    // Filtrar apenas tipos que podem ser duplicados (formas e textos)
+    // Atores e objetos NÃO podem ser duplicados na mesma cena
+    const allowedTypes = ['rectangle', 'circle', 'line', 'arrow', 'path', 'textbox', 'text']
+    const elementsToDuplicate = elements.filter((el) => ids.includes(el.id) && allowedTypes.includes(el.type))
+
+    if (elementsToDuplicate.length === 0) return
+
     const maxZIndex = elements.length > 0 ? Math.max(...elements.map(el => el.zIndex || 0)) : 0
 
     const duplicatedElements = elementsToDuplicate.map((el, index) => ({
