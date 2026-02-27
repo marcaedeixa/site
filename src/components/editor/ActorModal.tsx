@@ -125,6 +125,7 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         user_id: user.id,
         name: formData.actorName.trim(),
         color: formData.strokeColor,
+        initials: normalizedInitials,
         notes: null,
         appearance_config: {
           shape: 'circle',
