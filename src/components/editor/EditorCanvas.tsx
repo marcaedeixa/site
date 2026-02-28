@@ -6,6 +6,8 @@ import { ActorModal } from './ActorModal'
 import { FullscreenSlideshow } from './FullscreenSlideshow'
 import { useAuth } from '@/hooks/useAuth'
 import { useUserPlan } from '@/hooks/useUserPlan'
+import { createClient } from '@/lib/supabase/client'
+import { useParams } from 'next/navigation'
 
 import { createUnifiedStageSync, extractPathData } from '@/lib/svgUtils'
 import { TOUCH_DROP_EVENT, TouchDropDetail, TouchDropPayload } from '@/hooks/useTouchCanvasDrop'
@@ -98,6 +100,10 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const [dragOffset, setDragOffset] = useState<Point>({ x: 0, y: 0 })
   const [showActorModal, setShowActorModal] = useState(false)
   const [actorModalPosition, setActorModalPosition] = useState<Point>({ x: 0, y: 0 })
+  const [dbActorCount, setDbActorCount] = useState(0)
+  const params = useParams()
+  const canvasProjectId = params?.projectId as string
+  const supabaseCanvas = createClient()
   const [isSelecting, setIsSelecting] = useState(false)
   const [selectionStart, setSelectionStart] = useState<Point | null>(null)
   const [selectionEnd, setSelectionEnd] = useState<Point | null>(null)
@@ -135,6 +141,27 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
   // Get slideshow state from store
   const { stageConfig, isPlayingSlideshow, hoverPreviewEnabled, hoverPreviewColor } = useEditorStore()
+
+  // Carregar contagem de atores do banco (para exibição correta no ActorModal)
+  useEffect(() => {
+    const loadActorCount = async () => {
+      if (!canvasProjectId || !user) return
+      try {
+        const { count } = await supabaseCanvas
+          .from('actors')
+          .select('*', { count: 'exact', head: true })
+          .eq('project_id', canvasProjectId)
+          .eq('user_id', user.id)
+        setDbActorCount(count || 0)
+      } catch (error) {
+        console.error('Erro ao carregar contagem de atores:', error)
+      }
+    }
+    loadActorCount()
+    const handleActorCreated = () => loadActorCount()
+    window.addEventListener('actorCreated', handleActorCreated)
+    return () => window.removeEventListener('actorCreated', handleActorCreated)
+  }, [canvasProjectId, user])
 
   useEffect(() => {
     if (!hoverPreviewEnabled && hoveredElementId) {
@@ -3767,7 +3794,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         onClose={handleActorModalClose}
         onSave={handleActorModalSave}
         position={actorModalPosition}
-        currentActorCount={elements.filter(el => el.type === 'actor').length}
+        currentActorCount={dbActorCount}
         planTier={userPlan.tier}
       />
 

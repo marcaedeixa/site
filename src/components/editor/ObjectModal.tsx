@@ -137,18 +137,12 @@ export function ObjectModal({ isOpen, onClose, onSave, position, currentObjectCo
   const handleSave = async () => {
     if (!validateForm() || !user || !projectId) return
 
-    // Check object limit
-    const limits = getLimitsForTier(planTier)
-    if (currentObjectCount >= limits.maxObjectsPerProject) {
-      setErrors({ objectName: getLimitReachedMessage('maxObjectsPerProject', planTier) })
-      return
-    }
-
     try {
       setSaving(true)
       const normalizedInitials = sanitizeInitials(formData.objectInitials.trim())
       const normalizedName = formData.objectName.trim().toLowerCase()
 
+      // Buscar objetos existentes no banco (fonte de verdade para contagem e validação de duplicidade)
       const { data: existingObjects, error: fetchError } = await supabase
         .from('objects')
         .select('id, name, initials')
@@ -161,6 +155,14 @@ export function ObjectModal({ isOpen, onClose, onSave, position, currentObjectCo
         return
       }
 
+      // Check object limit usando contagem real do banco (não o prop do componente pai)
+      const realObjectCount = (existingObjects || []).length
+      const limits = getLimitsForTier(planTier)
+      if (realObjectCount >= limits.maxObjectsPerProject) {
+        setErrors({ objectName: getLimitReachedMessage('maxObjectsPerProject', planTier) })
+        setSaving(false)
+        return
+      }
       const duplicates = {
         name: (existingObjects || []).some(
           object => object.name?.trim().toLowerCase() === normalizedName

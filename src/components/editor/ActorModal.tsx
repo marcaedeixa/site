@@ -86,17 +86,11 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
   const handleSave = async () => {
     if (!validateForm() || !user || !projectId) return
 
-    // Check actor limit
-    const limits = getLimitsForTier(planTier)
-    if (currentActorCount >= limits.maxActorsPerProject) {
-      setErrors({ actorName: getLimitReachedMessage('maxActorsPerProject', planTier) })
-      return
-    }
-
     try {
       setSaving(true)
       const normalizedInitials = formData.actorInitials.trim().toUpperCase()
 
+      // Buscar atores existentes no banco (fonte de verdade para contagem e validação de sigla)
       const { data: existingActors, error: fetchError } = await supabase
         .from('actors')
         .select('id, appearance_config')
@@ -104,8 +98,17 @@ export function ActorModal({ isOpen, onClose, onSave, position, initialData, cur
         .eq('user_id', user.id)
 
       if (fetchError) {
-        console.error('Erro ao validar sigla única:', fetchError)
-        setErrors({ actorInitials: 'Não foi possível validar a sigla. Tente novamente.' })
+        console.error('Erro ao validar ator:', fetchError)
+        setErrors({ actorName: 'Não foi possível validar. Tente novamente.' })
+        return
+      }
+
+      // Check actor limit usando contagem real do banco (não o prop do componente pai)
+      const realActorCount = (existingActors || []).length
+      const limits = getLimitsForTier(planTier)
+      if (realActorCount >= limits.maxActorsPerProject) {
+        setErrors({ actorName: getLimitReachedMessage('maxActorsPerProject', planTier) })
+        setSaving(false)
         return
       }
 
