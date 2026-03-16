@@ -749,8 +749,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
               const sy = pb.height ? (height / pb.height) : 1
               tempCtx.save()
               // Apply same transform used in rendering
-              tempCtx.translate(x - pb.x, y - pb.y)
+              tempCtx.translate(x, y)
               tempCtx.scale(sx, sy)
+              tempCtx.translate(-pb.x, -pb.y)
               const hit = tempCtx.isPointInPath(path2D, point.x, point.y) ||
                 tempCtx.isPointInStroke(path2D, point.x, point.y)
               tempCtx.restore()
@@ -1976,20 +1977,6 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           ...(resizePreview.borderRadius !== undefined && { borderRadius: resizePreview.borderRadius })
         }
 
-        // Update pathBounds for path elements with pathData to maintain consistency
-        if (element.type === 'path' && element.pathData && element.pathBounds) {
-          const originalBounds = element.pathBounds
-          const scaleX = resizePreview.width / (element.width || 1)
-          const scaleY = resizePreview.height / (element.height || 1)
-
-          updates.pathBounds = {
-            x: resizePreview.x,
-            y: resizePreview.y,
-            width: originalBounds.width * scaleX,
-            height: originalBounds.height * scaleY
-          }
-        }
-
         onUpdateElement(elementId, updates)
 
         const { saveToHistory } = useEditorStore.getState()
@@ -2145,8 +2132,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             const sx = pb.width ? ((element.width ?? pb.width) / pb.width) : 1
             const sy = pb.height ? ((element.height ?? pb.height) / pb.height) : 1
             ctx.save()
-            ctx.translate((element.x ?? 0) - pb.x, (element.y ?? 0) - pb.y)
+            ctx.translate(element.x ?? 0, element.y ?? 0)
             ctx.scale(sx, sy)
+            ctx.translate(-pb.x, -pb.y)
             if (element.fillColor && element.fillColor !== 'transparent') {
               ctx.fillStyle = element.fillColor
               ctx.fill(path2D)
@@ -2696,8 +2684,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
           const sx = pb.width ? (currentWidth / pb.width) : 1
           const sy = pb.height ? (currentHeight / pb.height) : 1
           ctx.save()
-          ctx.translate(x - pb.x, y - pb.y)
+          ctx.translate(x, y)
           ctx.scale(sx, sy)
+          ctx.translate(-pb.x, -pb.y)
           if (element.fillColor && element.fillColor !== 'transparent') {
             ctx.fillStyle = element.fillColor
             ctx.fill(path2D, 'evenodd')
@@ -3223,8 +3212,9 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
               const sx = pb.width ? (width / pb.width) : 1
               const sy = pb.height ? (height / pb.height) : 1
               ctx.save()
-              ctx.translate(x - pb.x, y - pb.y)
+              ctx.translate(x, y)
               ctx.scale(sx, sy)
+              ctx.translate(-pb.x, -pb.y)
               ctx.lineWidth = 1 / viewport.zoom
               ctx.stroke(path2D)
               ctx.restore()

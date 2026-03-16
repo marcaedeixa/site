@@ -116,8 +116,26 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in GET /api/stripe/checkout:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error'
+
+    // Provide specific messages for common Stripe errors
+    if (errorMessage.includes('STRIPE_SECRET_KEY')) {
+      return NextResponse.json(
+        { error: 'Stripe não está configurado. Verifique as variáveis de ambiente.' },
+        { status: 503 }
+      );
+    }
+
+    if (errorMessage.includes('billing portal') || errorMessage.includes('configuration')) {
+      return NextResponse.json(
+        { error: 'O portal de cobrança do Stripe precisa ser configurado no Dashboard do Stripe.' },
+        { status: 503 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Erro ao acessar portal de cobrança: ${errorMessage}` },
       { status: 500 }
     );
   }

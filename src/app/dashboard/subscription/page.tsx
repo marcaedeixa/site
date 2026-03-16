@@ -167,7 +167,11 @@ export default function SubscriptionPage() {
                 <p className="text-sm text-gray-600 mb-3">
                   Dificuldades com cobrança ou métodos de pagamento
                 </p>
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open('mailto:suporte@marcaedeixa.com?subject=Problema de Pagamento', '_blank')}
+                >
                   Contatar Suporte
                 </Button>
               </div>
@@ -193,7 +197,11 @@ export default function SubscriptionPage() {
                 <p className="text-sm text-gray-600 mb-3">
                   Outras questões sobre sua conta ou assinatura
                 </p>
-                <Button variant="outline" size="sm">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open('https://support.stripe.com', '_blank')}
+                >
                   FAQ
                 </Button>
               </div>

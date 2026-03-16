@@ -131,14 +131,29 @@ export default function SettingsPage() {
   }
 
   const handleCancelAccount = async () => {
+    if (!user?.id) return
+
     try {
-      // TODO: Implementar cancelamento de conta
-      console.log('Cancelando conta...')
+      setLoading(true)
+      const response = await fetch('/api/account/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Erro ao cancelar conta')
+      }
+
       await signOut()
       router.push('/login')
     } catch (error) {
       console.error('Erro ao cancelar conta:', error)
-      alert('Erro ao cancelar conta')
+      alert(`Erro ao cancelar conta: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
+    } finally {
+      setLoading(false)
+      setShowCancelDialog(false)
     }
   }
 
