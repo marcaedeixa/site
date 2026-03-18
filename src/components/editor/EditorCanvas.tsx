@@ -112,6 +112,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   const [isResizing, setIsResizing] = useState(false)
   const [resizeStartPoint, setResizeStartPoint] = useState<Point | null>(null)
   const [resizeStartBounds, setResizeStartBounds] = useState<{ x: number, y: number, width: number, height: number } | null>(null)
+  const [resizeElementIds, setResizeElementIds] = useState<string[]>([])
+  const [resizeStartElements, setResizeStartElements] = useState<Record<string, Element>>({})
   const [resizePreview, setResizePreview] = useState<{ x: number, y: number, width: number, height: number, borderRadius?: number } | null>(null)
   const [currentCursor, setCurrentCursor] = useState<string>('default')
   const [isShiftPressed, setIsShiftPressed] = useState(false)
@@ -654,6 +656,55 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
   }, [getEffectiveTextboxHeight])
 
+  const getSelectionBounds = useCallback((
+    elementIds: string[],
+    positions: { [id: string]: { x: number, y: number } } = {}
+  ) => {
+    const targetElements = elements.filter(element => elementIds.includes(element.id))
+    if (targetElements.length === 0) {
+      return null
+    }
+
+    const aggregated = targetElements.reduce((bounds, element) => {
+      const position = positions[element.id]
+      const elementBounds = getElementBounds(position ? { ...element, ...position } : element)
+
+      return {
+        minX: Math.min(bounds.minX, elementBounds.minX),
+        maxX: Math.max(bounds.maxX, elementBounds.maxX),
+        minY: Math.min(bounds.minY, elementBounds.minY),
+        maxY: Math.max(bounds.maxY, elementBounds.maxY)
+      }
+    }, {
+      minX: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY
+    })
+
+    return {
+      ...aggregated,
+      width: aggregated.maxX - aggregated.minX,
+      height: aggregated.maxY - aggregated.minY,
+      centerX: (aggregated.minX + aggregated.maxX) / 2,
+      centerY: (aggregated.minY + aggregated.maxY) / 2
+    }
+  }, [elements, getElementBounds])
+
+  const getSelectionResizeHandles = useCallback((bounds: { minX: number, minY: number, maxX: number, maxY: number, width: number, height: number }) => {
+    const handleSize = 8 / viewport.zoom
+    return [
+      { id: 'nw', x: bounds.minX - handleSize / 2, y: bounds.minY - handleSize / 2, cursor: 'nw-resize' },
+      { id: 'ne', x: bounds.maxX - handleSize / 2, y: bounds.minY - handleSize / 2, cursor: 'ne-resize' },
+      { id: 'sw', x: bounds.minX - handleSize / 2, y: bounds.maxY - handleSize / 2, cursor: 'sw-resize' },
+      { id: 'se', x: bounds.maxX - handleSize / 2, y: bounds.maxY - handleSize / 2, cursor: 'se-resize' },
+      { id: 'n', x: bounds.centerX - handleSize / 2, y: bounds.minY - handleSize / 2, cursor: 'n-resize' },
+      { id: 's', x: bounds.centerX - handleSize / 2, y: bounds.maxY - handleSize / 2, cursor: 's-resize' },
+      { id: 'w', x: bounds.minX - handleSize / 2, y: bounds.centerY - handleSize / 2, cursor: 'w-resize' },
+      { id: 'e', x: bounds.maxX - handleSize / 2, y: bounds.centerY - handleSize / 2, cursor: 'e-resize' }
+    ]
+  }, [viewport.zoom])
+
   // Check if point is inside element
   const isPointInElement = useCallback((point: Point, element: Element): boolean => {
     const { x, y, width = 0, height = 0, type } = element
@@ -932,8 +983,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
   }, [viewport.zoom, getEffectiveTextboxHeight])
 
   // Check if point is on a resize handle
-  const getHandleAtPoint = useCallback((point: Point, element: Element): string | null => {
-    const handles = getResizeHandles(element)
+  const getHandleAtPoint = useCallback((point: Point, target: Element | { minX: number, minY: number, maxX: number, maxY: number, width: number, height: number }): string | null => {
+    const handles = 'id' in target ? getResizeHandles(target) : getSelectionResizeHandles(target)
     const handleSize = 8 / viewport.zoom
 
     for (const handle of handles) {
@@ -952,7 +1003,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     return null
-  }, [getResizeHandles, viewport.zoom])
+  }, [getResizeHandles, getSelectionResizeHandles, viewport.zoom])
 
   // Update cursor based on mouse position
   const updateCursor = useCallback((e: React.MouseEvent) => {
@@ -983,7 +1034,19 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     // Check for resize handles on selected elements
-    if (selectedElements.length === 1) {
+    if (selectedElements.length > 1) {
+      const canvasPoint = screenToCanvas(e.clientX, e.clientY)
+      const selectionBounds = getSelectionBounds(selectedElements)
+
+      if (selectionBounds) {
+        const handleId = getHandleAtPoint(canvasPoint, selectionBounds)
+        if (handleId) {
+          const handle = getSelectionResizeHandles(selectionBounds).find(item => item.id === handleId)
+          setCurrentCursor(handle?.cursor || 'default')
+          return
+        }
+      }
+    } else if (selectedElements.length === 1) {
       const canvasPoint = screenToCanvas(e.clientX, e.clientY)
       const selectedElement = elements.find(el => el.id === selectedElements[0])
 
@@ -1019,7 +1082,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       }
       setCurrentCursor('default')
     }
-  }, [isSpacePressed, isPanning, isResizing, draggedElements.length, selectedTool, selectedElements, elements, screenToCanvas, getHandleAtPoint, getResizeHandles, getElementAtPoint, hoveredElementId])
+  }, [isSpacePressed, isPanning, isResizing, draggedElements.length, selectedTool, selectedElements, elements, screenToCanvas, getHandleAtPoint, getResizeHandles, getSelectionResizeHandles, getSelectionBounds, getElementAtPoint, hoveredElementId])
 
   // Check if element is within selection rectangle
   const isElementInSelection = useCallback((element: Element, start: Point, end: Point): boolean => {
@@ -1090,57 +1153,35 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     // Get all non-dragged elements as reference points
     const referenceElements = elements.filter(el => !draggedElementIds.includes(el.id))
 
-    // Get dragged elements with their current positions
-    const draggedElements = elements.filter(el => draggedElementIds.includes(el.id))
-
-    // Normalize bounds for any element, handling negative width/height (lines drawn right-to-left)
-    const getAlignBounds = (el: Element, pos?: { x: number; y: number }) => {
-      const x = pos?.x ?? el.x
-      const y = pos?.y ?? el.y
-      const w = el.width ?? 0
-      const h = el.height ?? 0
-      const left = Math.min(x, x + w)
-      const right = Math.max(x, x + w)
-      const top = Math.min(y, y + h)
-      const bottom = Math.max(y, y + h)
-      return { left, right, top, bottom, centerX: (left + right) / 2, centerY: (top + bottom) / 2 }
+    const draggedBounds = getSelectionBounds(draggedElementIds, currentPositions)
+    if (!draggedBounds) {
+      return guides
     }
 
-    draggedElements.forEach(draggedEl => {
-      const currentPos = currentPositions[draggedEl.id] || { x: draggedEl.x, y: draggedEl.y }
-      const dragged = getAlignBounds(draggedEl, currentPos)
+    referenceElements.forEach(refEl => {
+      const ref = getElementBounds(refEl)
+      const refCenterX = (ref.minX + ref.maxX) / 2
+      const refCenterY = (ref.minY + ref.maxY) / 2
 
-      referenceElements.forEach(refEl => {
-        const ref = getAlignBounds(refEl)
+      if (Math.abs(draggedBounds.minX - ref.minX) <= SNAP_THRESHOLD) {
+        guides.vertical.push(ref.minX)
+      }
+      if (Math.abs(draggedBounds.centerX - refCenterX) <= SNAP_THRESHOLD) {
+        guides.vertical.push(refCenterX)
+      }
+      if (Math.abs(draggedBounds.maxX - ref.maxX) <= SNAP_THRESHOLD) {
+        guides.vertical.push(ref.maxX)
+      }
 
-        // Vertical alignment checks
-        // Left edges
-        if (Math.abs(dragged.left - ref.left) <= SNAP_THRESHOLD) {
-          guides.vertical.push(ref.left)
-        }
-        // Centers
-        if (Math.abs(dragged.centerX - ref.centerX) <= SNAP_THRESHOLD) {
-          guides.vertical.push(ref.centerX)
-        }
-        // Right edges
-        if (Math.abs(dragged.right - ref.right) <= SNAP_THRESHOLD) {
-          guides.vertical.push(ref.right)
-        }
-
-        // Horizontal alignment checks
-        // Top edges
-        if (Math.abs(dragged.top - ref.top) <= SNAP_THRESHOLD) {
-          guides.horizontal.push(ref.top)
-        }
-        // Centers
-        if (Math.abs(dragged.centerY - ref.centerY) <= SNAP_THRESHOLD) {
-          guides.horizontal.push(ref.centerY)
-        }
-        // Bottom edges
-        if (Math.abs(dragged.bottom - ref.bottom) <= SNAP_THRESHOLD) {
-          guides.horizontal.push(ref.bottom)
-        }
-      })
+      if (Math.abs(draggedBounds.minY - ref.minY) <= SNAP_THRESHOLD) {
+        guides.horizontal.push(ref.minY)
+      }
+      if (Math.abs(draggedBounds.centerY - refCenterY) <= SNAP_THRESHOLD) {
+        guides.horizontal.push(refCenterY)
+      }
+      if (Math.abs(draggedBounds.maxY - ref.maxY) <= SNAP_THRESHOLD) {
+        guides.horizontal.push(ref.maxY)
+      }
     })
 
     // Remove duplicates and sort
@@ -1148,7 +1189,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     guides.horizontal = [...new Set(guides.horizontal)].sort((a, b) => a - b)
 
     return guides
-  }, [elements])
+  }, [elements, getElementBounds, getSelectionBounds])
 
   // Get elements within selection rectangle (optimized with memoization)
   const getElementsInSelection = useCallback((start: Point, end: Point): string[] => {
@@ -1232,6 +1273,48 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
     // Handle selection tool
     if (selectedTool === 'select') {
+      if (selectedElements.length > 1) {
+        const { isElementLocked } = useEditorStore.getState()
+        const unlockedSelection = selectedElements.filter(id => !isElementLocked(id))
+        const selectionBounds = getSelectionBounds(unlockedSelection)
+
+        if (selectionBounds) {
+          const selectionHandleId = getHandleAtPoint(canvasPoint, selectionBounds)
+          if (selectionHandleId) {
+            e.preventDefault()
+            e.stopPropagation()
+
+            setIsResizing(true)
+            setResizeHandle(selectionHandleId)
+            setResizeStartPoint(canvasPoint)
+            setResizeStartBounds({
+              x: selectionBounds.minX,
+              y: selectionBounds.minY,
+              width: selectionBounds.width,
+              height: selectionBounds.height
+            })
+            setResizeElementIds(unlockedSelection)
+            setResizeStartElements(
+              Object.fromEntries(
+                unlockedSelection
+                  .map(id => {
+                    const element = elements.find(el => el.id === id)
+                    return element ? [id, { ...element }] : null
+                  })
+                  .filter((entry): entry is [string, Element] => entry !== null)
+              )
+            )
+            setResizePreview({
+              x: selectionBounds.minX,
+              y: selectionBounds.minY,
+              width: selectionBounds.width,
+              height: selectionBounds.height
+            })
+            return
+          }
+        }
+      }
+
       // First, check for handles on selected elements (higher priority)
       for (const elementId of selectedElements) {
         const element = elements.find(el => el.id === elementId)
@@ -1274,6 +1357,8 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
             }
 
             setResizeStartBounds(initialBounds)
+            setResizeElementIds([element.id])
+            setResizeStartElements({ [element.id]: { ...element } })
             return
           }
         }
@@ -1325,11 +1410,11 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
         // Calculate offset from the first unlocked element (reference element used in drag delta calculation)
         // This ensures consistency between where we click and how we calculate movement
-        const referenceElement = elements.find(el => el.id === unlocked[0])
-        if (referenceElement) {
+        const selectionBounds = getSelectionBounds(unlocked)
+        if (selectionBounds) {
           setDragOffset({
-            x: canvasPoint.x - referenceElement.x,
-            y: canvasPoint.y - referenceElement.y
+            x: canvasPoint.x - selectionBounds.minX,
+            y: canvasPoint.y - selectionBounds.minY
           })
         } else {
           // Fallback to clicked element if reference not found
@@ -1440,7 +1525,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     setCurrentElement(newElement)
-  }, [selectedTool, selectedElements, screenToCanvas, getElementAtPoint, onSelectElements, onClearSelection, getCurrentProperties, getGroupElements, getElementBounds, isSpacePressed])
+  }, [selectedTool, selectedElements, screenToCanvas, getElementAtPoint, onSelectElements, onClearSelection, getCurrentProperties, getGroupElements, getElementBounds, getSelectionBounds, isSpacePressed])
 
   // Handle mouse move with debounced cursor update
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
@@ -1453,8 +1538,135 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     updateCursor(e)
 
     // Handle resizing
-    if (isResizing && resizeHandle && resizeStartPoint && resizeStartBounds && selectedElements.length === 1) {
-      const element = elements.find(el => el.id === selectedElements[0])
+    if (isResizing && resizeHandle && resizeStartPoint && resizeStartBounds && resizeElementIds.length > 0) {
+      const isGroupResize = resizeElementIds.length > 1
+      const element = resizeElementIds.length === 1 ? elements.find(el => el.id === resizeElementIds[0]) : null
+
+      if (isGroupResize) {
+        const deltaX = canvasPoint.x - resizeStartPoint.x
+        const deltaY = canvasPoint.y - resizeStartPoint.y
+        const newBounds = { ...resizeStartBounds }
+        const safeStartWidth = Math.max(1, resizeStartBounds.width)
+        const safeStartHeight = Math.max(1, resizeStartBounds.height)
+
+        switch (resizeHandle) {
+          case 'nw':
+            newBounds.x = resizeStartBounds.x + deltaX
+            newBounds.y = resizeStartBounds.y + deltaY
+            newBounds.width = resizeStartBounds.width - deltaX
+            newBounds.height = resizeStartBounds.height - deltaY
+            break
+          case 'ne':
+            newBounds.y = resizeStartBounds.y + deltaY
+            newBounds.width = resizeStartBounds.width + deltaX
+            newBounds.height = resizeStartBounds.height - deltaY
+            break
+          case 'sw':
+            newBounds.x = resizeStartBounds.x + deltaX
+            newBounds.width = resizeStartBounds.width - deltaX
+            newBounds.height = resizeStartBounds.height + deltaY
+            break
+          case 'se':
+            newBounds.width = resizeStartBounds.width + deltaX
+            newBounds.height = resizeStartBounds.height + deltaY
+            break
+          case 'n':
+            newBounds.y = resizeStartBounds.y + deltaY
+            newBounds.height = resizeStartBounds.height - deltaY
+            break
+          case 's':
+            newBounds.height = resizeStartBounds.height + deltaY
+            break
+          case 'w':
+            newBounds.x = resizeStartBounds.x + deltaX
+            newBounds.width = resizeStartBounds.width - deltaX
+            break
+          case 'e':
+            newBounds.width = resizeStartBounds.width + deltaX
+            break
+        }
+
+        newBounds.width = Math.max(1, newBounds.width)
+        newBounds.height = Math.max(1, newBounds.height)
+
+        if (snapEnabled) {
+          newBounds.x = snapToGrid(newBounds.x)
+          newBounds.y = snapToGrid(newBounds.y)
+          newBounds.width = snapToSize(newBounds.width)
+          newBounds.height = snapToSize(newBounds.height)
+        }
+
+        if (isShiftPressed && ['nw', 'ne', 'sw', 'se'].includes(resizeHandle)) {
+          const aspectRatio = safeStartWidth / safeStartHeight
+          const safeNewHeight = Math.max(1, newBounds.height)
+          if (newBounds.width / safeNewHeight > aspectRatio) {
+            newBounds.width = newBounds.height * aspectRatio
+          } else {
+            newBounds.height = newBounds.width / aspectRatio
+          }
+
+          if (resizeHandle === 'nw') {
+            newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+            newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+          } else if (resizeHandle === 'ne') {
+            newBounds.y = resizeStartBounds.y + resizeStartBounds.height - newBounds.height
+          } else if (resizeHandle === 'sw') {
+            newBounds.x = resizeStartBounds.x + resizeStartBounds.width - newBounds.width
+          }
+        }
+
+        const scaleX = newBounds.width / safeStartWidth
+        const scaleY = newBounds.height / safeStartHeight
+
+        resizeElementIds.forEach(elementId => {
+          const startElement = resizeStartElements[elementId]
+          if (!startElement) return
+
+          const updates: Partial<Element> = {
+            x: newBounds.x + (startElement.x - resizeStartBounds.x) * scaleX,
+            y: newBounds.y + (startElement.y - resizeStartBounds.y) * scaleY
+          }
+
+          if (startElement.width !== undefined) {
+            updates.width = startElement.width * scaleX
+          }
+          if (startElement.height !== undefined) {
+            updates.height = startElement.height * scaleY
+          }
+          if (startElement.borderRadius !== undefined) {
+            updates.borderRadius = startElement.borderRadius * Math.min(scaleX, scaleY)
+          }
+          if (startElement.circleX !== undefined) {
+            updates.circleX = newBounds.x + (startElement.circleX - resizeStartBounds.x) * scaleX
+          }
+          if (startElement.circleY !== undefined) {
+            updates.circleY = newBounds.y + (startElement.circleY - resizeStartBounds.y) * scaleY
+          }
+          if (startElement.circleWidth !== undefined) {
+            updates.circleWidth = startElement.circleWidth * scaleX
+          }
+          if (startElement.circleHeight !== undefined) {
+            updates.circleHeight = startElement.circleHeight * scaleY
+          }
+          if (startElement.curveOffsetX !== undefined) {
+            updates.curveOffsetX = startElement.curveOffsetX * scaleX
+          }
+          if (startElement.curveOffsetY !== undefined) {
+            updates.curveOffsetY = startElement.curveOffsetY * scaleY
+          }
+
+          onUpdateElement(elementId, updates, { commitHistory: false })
+        })
+
+        setResizePreview(newBounds)
+        setTooltip({
+          x: e.clientX + 10,
+          y: e.clientY - 30,
+          text: `${Math.round(newBounds.width)} × ${Math.round(newBounds.height)}`
+        })
+        return
+      }
+
       if (element) {
         const deltaX = canvasPoint.x - resizeStartPoint.x
         const deltaY = canvasPoint.y - resizeStartPoint.y
@@ -1702,30 +1914,29 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         return
       }
 
-      const newX = canvasPoint.x - dragOffset.x
-      const newY = canvasPoint.y - dragOffset.y
-
-      // Calculate the movement delta from the first unlocked element (reference element)
-      const firstElement = elements.find(el => el.id === unlocked[0])
-      if (!firstElement) {
+      const selectionBounds = getSelectionBounds(unlocked)
+      if (!selectionBounds) {
         return
       }
 
-        // Calculate raw delta (before any snapping)
-        let deltaX = newX - firstElement.x
-        let deltaY = newY - firstElement.y
+      const newX = canvasPoint.x - dragOffset.x
+      const newY = canvasPoint.y - dragOffset.y
 
-        // Apply snap to grid ONLY on the reference element's new position
+        // Calculate raw delta (before any snapping)
+        let deltaX = newX - selectionBounds.minX
+        let deltaY = newY - selectionBounds.minY
+
+        // Apply snap to grid ONLY on the selection bounds position
         // Then calculate the snapped delta to apply to ALL elements
-        let referenceNewX = firstElement.x + deltaX
-        let referenceNewY = firstElement.y + deltaY
+        let referenceNewX = selectionBounds.minX + deltaX
+        let referenceNewY = selectionBounds.minY + deltaY
 
         if (snapEnabled) {
           const snappedX = snapToGrid(referenceNewX)
           const snappedY = snapToGrid(referenceNewY)
           // Calculate the snapped delta - this same delta will be applied to all elements
-          deltaX = snappedX - firstElement.x
-          deltaY = snappedY - firstElement.y
+          deltaX = snappedX - selectionBounds.minX
+          deltaY = snappedY - selectionBounds.minY
           referenceNewX = snappedX
           referenceNewY = snappedY
         }
@@ -1755,47 +1966,40 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
         let guideSnapOffsetY = 0
 
         // Check reference element against guides
-        const refElement = firstElement
-        const refPos = newPositions[refElement.id]
-        if (refPos) {
-          const elementCenterX = refPos.x + (refElement.width || 0) / 2
-          const elementRight = refPos.x + (refElement.width || 0)
-
+        const movedSelectionBounds = getSelectionBounds(unlocked, newPositions)
+        if (movedSelectionBounds) {
           for (const guideX of guides.vertical) {
             // Snap left edge
-            if (Math.abs(refPos.x - guideX) <= SNAP_THRESHOLD) {
-              guideSnapOffsetX = guideX - refPos.x
+            if (Math.abs(movedSelectionBounds.minX - guideX) <= SNAP_THRESHOLD) {
+              guideSnapOffsetX = guideX - movedSelectionBounds.minX
               break
             }
             // Snap center
-            if (Math.abs(elementCenterX - guideX) <= SNAP_THRESHOLD) {
-              guideSnapOffsetX = guideX - elementCenterX
+            if (Math.abs(movedSelectionBounds.centerX - guideX) <= SNAP_THRESHOLD) {
+              guideSnapOffsetX = guideX - movedSelectionBounds.centerX
               break
             }
             // Snap right edge
-            if (Math.abs(elementRight - guideX) <= SNAP_THRESHOLD) {
-              guideSnapOffsetX = guideX - elementRight
+            if (Math.abs(movedSelectionBounds.maxX - guideX) <= SNAP_THRESHOLD) {
+              guideSnapOffsetX = guideX - movedSelectionBounds.maxX
               break
             }
           }
 
-          const elementCenterY = refPos.y + (refElement.height || 0) / 2
-          const elementBottom = refPos.y + (refElement.height || 0)
-
           for (const guideY of guides.horizontal) {
             // Snap top edge
-            if (Math.abs(refPos.y - guideY) <= SNAP_THRESHOLD) {
-              guideSnapOffsetY = guideY - refPos.y
+            if (Math.abs(movedSelectionBounds.minY - guideY) <= SNAP_THRESHOLD) {
+              guideSnapOffsetY = guideY - movedSelectionBounds.minY
               break
             }
             // Snap center
-            if (Math.abs(elementCenterY - guideY) <= SNAP_THRESHOLD) {
-              guideSnapOffsetY = guideY - elementCenterY
+            if (Math.abs(movedSelectionBounds.centerY - guideY) <= SNAP_THRESHOLD) {
+              guideSnapOffsetY = guideY - movedSelectionBounds.centerY
               break
             }
             // Snap bottom edge
-            if (Math.abs(elementBottom - guideY) <= SNAP_THRESHOLD) {
-              guideSnapOffsetY = guideY - elementBottom
+            if (Math.abs(movedSelectionBounds.maxY - guideY) <= SNAP_THRESHOLD) {
+              guideSnapOffsetY = guideY - movedSelectionBounds.maxY
               break
             }
           }
@@ -1913,7 +2117,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
 
       setCurrentElement(updatedElement)
     }
-  }, [isPanning, lastPanPoint, draggedElements, selectedTool, isDrawing, currentElement, startPoint, viewport, onUpdateViewport, dragOffset, elements, onUpdateElement, screenToCanvas, isSelecting, selectionStart, isResizing, resizeHandle, resizeStartPoint, resizeStartBounds, isShiftPressed, snapEnabled, snapToGrid, snapToSize, getElementBounds])
+  }, [isPanning, lastPanPoint, draggedElements, selectedTool, isDrawing, currentElement, startPoint, viewport, onUpdateViewport, dragOffset, elements, onUpdateElement, screenToCanvas, isSelecting, selectionStart, isResizing, resizeHandle, resizeStartPoint, resizeStartBounds, resizeElementIds, resizeStartElements, isShiftPressed, snapEnabled, snapToGrid, snapToSize, getElementBounds, getSelectionBounds, updateCursor])
 
   // Handle mouse up
   const handleMouseUp = useCallback(() => {
@@ -1964,30 +2168,34 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     // Clear guide lines when dragging ends
     setGuideLines({ vertical: [], horizontal: [] })
     // Apply resize changes and save to history when finishing resize
-    if (isResizing && resizePreview && selectedElements.length === 1) {
-      const elementId = selectedElements[0]
-      const element = elements.find(el => el.id === elementId)
+    if (isResizing) {
+      if (resizePreview && resizeElementIds.length === 1) {
+        const elementId = resizeElementIds[0]
+        const element = elements.find(el => el.id === elementId)
 
-      if (element) {
-        const updates: Partial<Element> = {
-          x: resizePreview.x,
-          y: resizePreview.y,
-          width: resizePreview.width,
-          height: resizePreview.height,
-          ...(resizePreview.borderRadius !== undefined && { borderRadius: resizePreview.borderRadius })
+        if (element) {
+          const updates: Partial<Element> = {
+            x: resizePreview.x,
+            y: resizePreview.y,
+            width: resizePreview.width,
+            height: resizePreview.height,
+            ...(resizePreview.borderRadius !== undefined && { borderRadius: resizePreview.borderRadius })
+          }
+
+          onUpdateElement(elementId, updates)
         }
-
-        onUpdateElement(elementId, updates)
-
-        const { saveToHistory } = useEditorStore.getState()
-        saveToHistory()
       }
+
+      const { saveToHistory } = useEditorStore.getState()
+      saveToHistory()
     }
 
     setIsResizing(false)
     setResizeHandle(null)
     setResizeStartPoint(null)
     setResizeStartBounds(null)
+    setResizeElementIds([])
+    setResizeStartElements({})
     setResizePreview(null)
     setTooltip(null)
     setHoveredElementId(null)
@@ -2001,7 +2209,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       const { setSelectedTool } = useEditorStore.getState()
       setSelectedTool('select')
     }
-  }, [isDrawing, currentElement, onAddElement, isSelecting, selectionStart, selectionEnd, getElementsInSelection, getGroupElements, selectedElements, onSelectElements, isResizing, resizePreview, elements, onUpdateElement, draggedElements, selectedTool])
+  }, [isDrawing, currentElement, onAddElement, isSelecting, selectionStart, selectionEnd, getElementsInSelection, getGroupElements, selectedElements, onSelectElements, isResizing, resizePreview, resizeElementIds, elements, onUpdateElement, draggedElements, selectedTool])
 
   // Handle wheel for zoom and trackpad scrolling
   const handleWheel = useCallback((event: WheelEvent) => {
@@ -2207,9 +2415,57 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
       drawElement(ctx, currentElement as Element, false)
     }
 
+    const multiSelectionBounds = selectedElements.length > 1
+      ? getSelectionBounds(selectedElements)
+      : null
+
+    if (multiSelectionBounds) {
+      const previewBounds = isResizing && resizePreview && resizeElementIds.length > 1
+        ? {
+            minX: resizePreview.x,
+            minY: resizePreview.y,
+            maxX: resizePreview.x + resizePreview.width,
+            maxY: resizePreview.y + resizePreview.height,
+            width: resizePreview.width,
+            height: resizePreview.height,
+            centerX: resizePreview.x + resizePreview.width / 2,
+            centerY: resizePreview.y + resizePreview.height / 2
+          }
+        : multiSelectionBounds
+
+      ctx.save()
+      ctx.strokeStyle = '#007bff'
+      ctx.lineWidth = 2 / viewport.zoom
+      ctx.setLineDash([5 / viewport.zoom, 5 / viewport.zoom])
+      ctx.strokeRect(previewBounds.minX - 2, previewBounds.minY - 2, previewBounds.width + 4, previewBounds.height + 4)
+      ctx.setLineDash([])
+
+      const handles = getSelectionResizeHandles(previewBounds)
+      const baseHandleSize = 10
+      const minHandleSize = 8
+      const maxHandleSize = 16
+      const handleSize = Math.max(minHandleSize, Math.min(maxHandleSize, baseHandleSize / viewport.zoom))
+
+      ctx.lineWidth = Math.max(1, 2 / viewport.zoom)
+      ctx.fillStyle = '#007bff'
+      ctx.strokeStyle = '#ffffff'
+
+      handles.forEach(handle => {
+        ctx.fillRect(handle.x, handle.y, handleSize, handleSize)
+        ctx.strokeRect(handle.x, handle.y, handleSize, handleSize)
+
+        ctx.fillStyle = '#ffffff'
+        const innerSize = handleSize * 0.3
+        const innerOffset = (handleSize - innerSize) / 2
+        ctx.fillRect(handle.x + innerOffset, handle.y + innerOffset, innerSize, innerSize)
+        ctx.fillStyle = '#007bff'
+      })
+      ctx.restore()
+    }
+
     // Draw resize preview
-    if (isResizing && resizePreview && selectedElements.length === 1) {
-      const element = elements.find(el => el.id === selectedElements[0])
+    if (isResizing && resizePreview && resizeElementIds.length === 1) {
+      const element = elements.find(el => el.id === resizeElementIds[0])
       if (element) {
         const previewElement = {
           ...element,
@@ -2279,7 +2535,7 @@ export const EditorCanvas = forwardRef<HTMLCanvasElement, EditorCanvasProps>((
     }
 
     ctx.restore()
-  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview, hoverPreviewEnabled, hoveredElementId, hoverPreviewColor, drawHoverOutline, textEditor])
+  }, [elements, selectedElements, currentElement, viewport, containerRef, isSelecting, selectionStart, selectionEnd, stageConfig, guideLines, draggedElements, isResizing, resizePreview, resizeElementIds, hoverPreviewEnabled, hoveredElementId, hoverPreviewColor, drawHoverOutline, textEditor, getSelectionBounds, getSelectionResizeHandles])
 
   // Draw grid
   const drawGrid = (ctx: CanvasRenderingContext2D, viewport: Viewport) => {

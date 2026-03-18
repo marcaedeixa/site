@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 
 function getSupabase() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -11,24 +12,29 @@ function getSupabase() {
   )
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE() {
   try {
-    const { userId } = await request.json()
+    const supabase = await createServerClient()
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser()
 
-    if (!userId) {
-      return NextResponse.json({ error: 'userId is required' }, { status: 400 })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = getSupabase()
+    const userId = user.id
+    const adminSupabase = getSupabase()
 
     // Verify user exists
-    const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId)
-    if (userError || !userData) {
+    const { data: userData, error: userError } = await adminSupabase.auth.admin.getUserById(userId)
+    if (userError || !userData.user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Cancel active Stripe subscriptions if any
-    const { data: stripeCustomer } = await supabase
+    const { data: stripeCustomer } = await adminSupabase
       .from('stripe_customers')
       .select('stripe_customer_id')
       .eq('user_id', userId)
@@ -39,13 +45,16 @@ export async function DELETE(request: NextRequest) {
         const { getServerStripe } = await import('@/lib/stripe')
         const stripe = getServerStripe()
 
-        // Cancel all active subscriptions
+        // Cancel any non-terminated subscriptions before deleting the account.
         const subscriptions = await stripe.subscriptions.list({
           customer: stripeCustomer.stripe_customer_id,
-          status: 'active',
+          status: 'all',
         })
 
         for (const sub of subscriptions.data) {
+          if (sub.status === 'canceled' || sub.status === 'incomplete_expired') {
+            continue
+          }
           await stripe.subscriptions.cancel(sub.id)
         }
 
@@ -59,22 +68,32 @@ export async function DELETE(request: NextRequest) {
 
     // Delete user data from database tables (cascading)
     // Order matters: delete dependent tables first
-    const tables = ['actors', 'objects', 'projects', 'stripe_customers', 'subscriptions', 'payments']
+    const tables = [
+      'project_data',
+      'user_actions',
+      'subscription_history',
+      'user_subscriptions',
+      'payments',
+      'stripe_customers',
+      'actors',
+      'objects',
+      'projects'
+    ]
     for (const table of tables) {
-      const { error } = await supabase.from(table).delete().eq('user_id', userId)
+      const { error } = await adminSupabase.from(table).delete().eq('user_id', userId)
       if (error) {
         console.error(`Error deleting from ${table}:`, error)
       }
     }
 
     // Delete the user from Supabase Auth
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(userId)
+    const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId)
     if (deleteError) {
       console.error('Error deleting user:', deleteError)
       return NextResponse.json({ error: 'Error deleting user account' }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, deletedUserId: userId })
   } catch (error) {
     console.error('Error in DELETE /api/account/delete:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
