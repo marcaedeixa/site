@@ -62,7 +62,10 @@ export async function DELETE() {
         await stripe.customers.del(stripeCustomer.stripe_customer_id)
       } catch (stripeError) {
         console.error('Error cleaning up Stripe data:', stripeError)
-        // Continue with account deletion even if Stripe cleanup fails
+        return NextResponse.json(
+          { error: 'Não foi possível cancelar a assinatura e remover os dados do Stripe.' },
+          { status: 502 }
+        )
       }
     }
 
@@ -73,7 +76,8 @@ export async function DELETE() {
       'user_actions',
       'subscription_history',
       'user_subscriptions',
-      'payments',
+      'stripe_payments',
+      'stripe_subscriptions',
       'stripe_customers',
       'actors',
       'objects',
@@ -87,7 +91,7 @@ export async function DELETE() {
     }
 
     // Delete the user from Supabase Auth
-    const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId)
+    const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId, false)
     if (deleteError) {
       console.error('Error deleting user:', deleteError)
       return NextResponse.json({ error: 'Error deleting user account' }, { status: 500 })

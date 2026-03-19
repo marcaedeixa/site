@@ -7,16 +7,31 @@ import { createClient } from '@/lib/supabase/server';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const requestedUserId = searchParams.get('userId');
     const limit = parseInt(searchParams.get('limit') || '10');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    if (!userId) {
+    const authSupabase = await createClient()
+    const {
+      data: { user },
+      error: authError
+    } = await authSupabase.auth.getUser()
+
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
+
+    if (requestedUserId && requestedUserId !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    const userId = user.id
 
     const supabase = await createClient(true); // Use service role
     

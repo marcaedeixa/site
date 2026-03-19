@@ -137,7 +137,7 @@ export default function SubscriptionManager({ userId }: SubscriptionManagerProps
     setError('')
 
     try {
-      const response = await fetch(`/api/stripe/checkout?userId=${userId}&action=billing_portal`)
+      const response = await fetch('/api/stripe/checkout?action=billing_portal')
       const data = await response.json()
 
       if (response.ok) {

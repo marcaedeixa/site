@@ -21,6 +21,8 @@ import { User } from '@supabase/supabase-js'
 export default function SubscriptionPage() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [supportLoading, setSupportLoading] = useState(false)
+  const [supportError, setSupportError] = useState('')
   const router = useRouter()
   const supabase = createClient()
 
@@ -43,6 +45,30 @@ export default function SubscriptionPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleOpenBillingPortal = async () => {
+    try {
+      setSupportLoading(true)
+      setSupportError('')
+
+      const response = await fetch('/api/stripe/checkout?action=billing_portal')
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao abrir portal de cobrança')
+      }
+
+      window.open(data.portalUrl, '_blank')
+    } catch (error) {
+      setSupportError(error instanceof Error ? error.message : 'Erro ao abrir portal de cobrança')
+    } finally {
+      setSupportLoading(false)
+    }
+  }
+
+  const handleGeneralSupport = () => {
+    window.location.href = 'mailto:contato@marcaedeixa.com?subject=D%C3%BAvidas%20Gerais%20sobre%20Assinatura'
   }
 
   if (loading) {
@@ -89,6 +115,13 @@ export default function SubscriptionPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {supportError && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <Settings className="h-4 w-4" />
+            <AlertDescription className="text-red-800">{supportError}</AlertDescription>
+          </Alert>
+        )}
+
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview" className="flex items-center gap-2">
@@ -170,9 +203,10 @@ export default function SubscriptionPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open('mailto:suporte@marcaedeixa.com?subject=Problema de Pagamento', '_blank')}
+                  onClick={handleOpenBillingPortal}
+                  disabled={supportLoading}
                 >
-                  Contatar Suporte
+                  {supportLoading ? 'Abrindo...' : 'Abrir Cobrança'}
                 </Button>
               </div>
               
@@ -200,9 +234,9 @@ export default function SubscriptionPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => window.open('https://support.stripe.com', '_blank')}
+                  onClick={handleGeneralSupport}
                 >
-                  FAQ
+                  Falar com Suporte
                 </Button>
               </div>
             </div>

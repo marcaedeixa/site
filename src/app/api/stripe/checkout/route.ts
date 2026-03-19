@@ -5,6 +5,7 @@ import {
   createBillingPortalSession
 } from '@/lib/stripe-config';
 import { createClient } from '@supabase/supabase-js';
+import { createClient as createServerClient } from '@/lib/supabase/server';
 
 // Function to get Supabase client
 function getSupabase() {
@@ -74,15 +75,30 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const requestedUserId = searchParams.get('userId');
     const action = searchParams.get('action');
 
-    if (!userId) {
+    const authSupabase = await createServerClient()
+    const {
+      data: { user },
+      error: authError
+    } = await authSupabase.auth.getUser()
+
+    if (authError || !user) {
       return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
+
+    if (requestedUserId && requestedUserId !== user.id) {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
+    }
+
+    const userId = user.id
 
     // Get customer from database
     const supabase = getSupabase()
