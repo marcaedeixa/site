@@ -44,11 +44,13 @@ export const getStripe = () => {
 };
 
 // Stripe configuration constants
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
+
 export const STRIPE_CONFIG = {
   mode: process.env.STRIPE_MODE || 'test',
   currency: 'brl',
-  successUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/subscription/success`,
-  cancelUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/plans`,
+  successUrl: `${APP_URL}/dashboard/subscription/success`,
+  cancelUrl: `${APP_URL}/plans`,
   webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   trialDays: 0, // Sem trial — plano gratuito é permanente
 } as const;

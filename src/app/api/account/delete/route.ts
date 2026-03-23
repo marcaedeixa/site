@@ -70,28 +70,41 @@ export async function DELETE() {
     }
 
     // Delete user data from database tables (cascading)
-    // Order matters: delete dependent tables first
-    const tables = [
+    // stripe_payments and stripe_subscriptions use customer_id FK, not user_id
+    const { data: customerRecord } = await adminSupabase
+      .from('stripe_customers')
+      .select('id')
+      .eq('user_id', userId)
+      .single()
+
+    if (customerRecord?.id) {
+      // Delete tables that reference stripe_customers via customer_id
+      for (const table of ['stripe_payments', 'stripe_subscriptions']) {
+        const { error } = await adminSupabase.from(table).delete().eq('customer_id', customerRecord.id)
+        if (error) console.error(`Error deleting from ${table}:`, error)
+      }
+    }
+
+    // Delete tables that have direct user_id column
+    const userIdTables = [
       'project_data',
       'user_actions',
       'subscription_history',
       'user_subscriptions',
-      'stripe_payments',
-      'stripe_subscriptions',
       'stripe_customers',
       'actors',
       'objects',
       'projects'
     ]
-    for (const table of tables) {
+    for (const table of userIdTables) {
       const { error } = await adminSupabase.from(table).delete().eq('user_id', userId)
-      if (error) {
+      if (error && !error.message?.includes('does not exist')) {
         console.error(`Error deleting from ${table}:`, error)
       }
     }
 
     // Delete the user from Supabase Auth
-    const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId, false)
+    const { error: deleteError } = await adminSupabase.auth.admin.deleteUser(userId)
     if (deleteError) {
       console.error('Error deleting user:', deleteError)
       return NextResponse.json({ error: 'Error deleting user account' }, { status: 500 })

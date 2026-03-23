@@ -141,9 +141,10 @@ export async function createBillingPortalSession(
   customerId: string
 ): Promise<string> {
   try {
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').trim()
     const session = await getServerStripe().billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/dashboard/subscription`,
+      return_url: `${appUrl}/dashboard/subscription`,
     });
 
     return session.url;
