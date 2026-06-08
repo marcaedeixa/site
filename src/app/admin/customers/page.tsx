@@ -554,7 +554,7 @@ export default function CustomersPage() {
                   <tr className="border-b">
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Cliente</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Projetos</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-600">Plano</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Gasto Total</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Última Atividade</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Ações</th>
@@ -583,7 +583,7 @@ export default function CustomersPage() {
                         {getStatusBadge(customer)}
                       </td>
                       <td className="py-4 px-4">
-                        <span className="font-medium">{customer.total_projects ?? '—'}</span>
+                        <span className="font-medium">{customer.plan_name ?? '—'}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className="font-medium">
