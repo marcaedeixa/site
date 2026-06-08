@@ -480,14 +480,17 @@ export default function CustomersPage() {
                   {currentCustomers.map((customer) => (
                     <tr key={customer.id} className="border-b hover:bg-gray-50">
                       <td className="py-4 px-4">
-                        <div className="flex items-center">
+                        <div
+                          className="flex items-center cursor-pointer"
+                          onClick={() => setSelectedCustomer(customer)}
+                        >
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                             <span className="text-blue-600 font-medium">
                               {customer.full_name?.charAt(0) || customer.email.charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900">{customer.full_name || 'Nome não informado'}</p>
+                            <p className="font-medium text-gray-900 hover:text-blue-600">{customer.full_name || 'Nome não informado'}</p>
                             <p className="text-sm text-gray-500">{customer.email}</p>
                           </div>
                         </div>
@@ -531,13 +534,6 @@ export default function CustomersPage() {
                                 Ativar
                               </DropdownMenuItem>
                             )}
-                            <DropdownMenuItem 
-                              onClick={() => handleCustomerAction(customer.id, 'delete')}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Excluir
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
@@ -656,8 +652,8 @@ export default function CustomersPage() {
               
               <div className="flex space-x-3">
                 {selectedCustomer.is_active ? (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="flex-1"
                     onClick={() => {
                       handleCustomerAction(selectedCustomer.id, 'deactivate')
@@ -668,8 +664,8 @@ export default function CustomersPage() {
                     Desativar
                   </Button>
                 ) : (
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="flex-1"
                     onClick={() => {
                       handleCustomerAction(selectedCustomer.id, 'activate')
@@ -680,6 +676,17 @@ export default function CustomersPage() {
                     Ativar
                   </Button>
                 )}
+                <Button
+                  variant="outline"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    handleCustomerAction(selectedCustomer.id, 'delete')
+                    setSelectedCustomer(null)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Excluir
+                </Button>
               </div>
             </div>
           )}
