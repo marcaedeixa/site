@@ -11,8 +11,6 @@ import {
   Trash2,
   UserCheck,
   UserX,
-  RefreshCw,
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
