@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
       return {
         id: u.id,
         email: u.email,
+        full_name: (u.user_metadata?.full_name as string) ?? null,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at ?? null,
         subscription_status,

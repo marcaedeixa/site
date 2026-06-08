@@ -129,6 +129,7 @@ export default function CustomersPage() {
       const loaded: Customer[] = (data.users || []).map((u: {
         id: string
         email: string
+        full_name: string | null
         created_at: string
         last_sign_in_at: string | null
         subscription_status: 'free' | 'trial' | 'paid'
@@ -137,7 +138,7 @@ export default function CustomersPage() {
       }) => ({
         id: u.id,
         email: u.email,
-        full_name: undefined,
+        full_name: u.full_name ?? undefined,
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at ?? undefined,
         is_active: true,
