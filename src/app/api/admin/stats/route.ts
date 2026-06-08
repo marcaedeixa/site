@@ -104,6 +104,31 @@ export async function GET() {
     const trialCount = trialUsersCount || 0
     const freeUsers = Math.max(0, totalUsers - paidCount - trialCount)
 
+    // Trials expirando nos próximos 7 dias
+    const sevenDaysFromNow = new Date()
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7)
+    const { count: trialsExpiringSoonCount } = await supabaseAdmin
+      .from('user_subscriptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_trial', true)
+      .eq('status', 'active')
+      .gt('end_date', new Date().toISOString())
+      .lte('end_date', sevenDaysFromNow.toISOString())
+    const trialsExpiringSoon = trialsExpiringSoonCount || 0
+
+    // Receita do mês corrente (em centavos, como armazenado)
+    const startOfMonth = new Date()
+    startOfMonth.setDate(1)
+    startOfMonth.setHours(0, 0, 0, 0)
+    const { data: monthlyPaymentsData } = await supabaseAdmin
+      .from('stripe_payments')
+      .select('amount')
+      .eq('status', 'succeeded')
+      .gte('created_at', startOfMonth.toISOString())
+    const mrr = (monthlyPaymentsData || []).reduce(
+      (sum, p) => sum + (p.amount as number), 0
+    )
+
     return NextResponse.json({
       totalUsers,
       totalProjects: totalProjects || 0,
@@ -113,7 +138,10 @@ export async function GET() {
       weeklyGrowth,
       freeUsers,
       trialUsers: trialCount,
-      paidUsers: paidCount
+      paidUsers: paidCount,
+      newThisWeek: thisWeekNew,
+      trialsExpiringSoon,
+      mrr,
     })
   } catch (error) {
     console.error('Erro ao obter estatísticas:', error)
