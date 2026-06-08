@@ -369,6 +369,14 @@ export default function CustomersPage() {
           <Card
             className={`transition-colors ${stats.trialsExpiringSoon > 0 ? 'cursor-pointer hover:bg-amber-50' : ''}`}
             onClick={() => stats.trialsExpiringSoon > 0 && setSubscriptionFilter('trial')}
+            role={stats.trialsExpiringSoon > 0 ? 'button' : undefined}
+            tabIndex={stats.trialsExpiringSoon > 0 ? 0 : undefined}
+            onKeyDown={(e) => {
+              if (stats.trialsExpiringSoon > 0 && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault()
+                setSubscriptionFilter('trial')
+              }
+            }}
           >
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
@@ -439,7 +447,7 @@ export default function CustomersPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Crescimento Semanal</p>
                   <p className={`text-2xl font-bold ${stats.weeklyGrowth >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    {stats.weeklyGrowth >= 0 ? '+' : ''}{stats.weeklyGrowth}%
+                    {stats.weeklyGrowth >= 0 ? '+' : ''}{Math.round(stats.weeklyGrowth)}%
                   </p>
                   <p className="text-xs mt-1 text-gray-400">vs. semana anterior</p>
                 </div>
