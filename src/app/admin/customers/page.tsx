@@ -7,9 +7,8 @@ import {
   Search, 
   Filter, 
   Download, 
-  Eye, 
-  Edit, 
-  Trash2, 
+  Eye,
+  Trash2,
   UserCheck, 
   UserX, 
   RefreshCw, 
@@ -17,7 +16,6 @@ import {
   ChevronLeft, 
   ChevronRight, 
   MoreHorizontal,
-  Mail,
   Calendar,
   CreditCard,
   Activity,
@@ -522,10 +520,6 @@ export default function CustomersPage() {
                               <Eye className="h-4 w-4 mr-2" />
                               Visualizar
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Mail className="h-4 w-4 mr-2" />
-                              Enviar Email
-                            </DropdownMenuItem>
                             {customer.is_active ? (
                               <DropdownMenuItem onClick={() => handleCustomerAction(customer.id, 'deactivate')}>
                                 <UserX className="h-4 w-4 mr-2" />
@@ -661,14 +655,6 @@ export default function CustomersPage() {
               <Separator />
               
               <div className="flex space-x-3">
-                <Button variant="outline" className="flex-1">
-                  <Mail className="h-4 w-4 mr-2" />
-                  Enviar Email
-                </Button>
-                <Button variant="outline" className="flex-1">
-                  <Edit className="h-4 w-4 mr-2" />
-                  Editar Cliente
-                </Button>
                 {selectedCustomer.is_active ? (
                   <Button 
                     variant="outline" 
