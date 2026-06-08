@@ -63,26 +63,45 @@ export async function GET() {
       : thisWeekNew > 0 ? 100 : 0
 
     // Contar projetos
-    const { count: totalProjects } = await supabaseAdmin
+    const { count: totalProjects, error: projectsError } = await supabaseAdmin
       .from('projects')
       .select('*', { count: 'exact', head: true })
+    if (projectsError) console.error('Erro ao contar projetos:', projectsError)
 
-    // Usuários pagos (assinatura Stripe ativa)
-    const { count: paidUsers } = await supabaseAdmin
+    // Usuários pagos — buscar user_ids distintos via stripe_customers
+    const { data: activeSubs } = await supabaseAdmin
       .from('stripe_subscriptions')
-      .select('*', { count: 'exact', head: true })
+      .select('customer_id')
       .in('status', ['active', 'trialing'])
 
-    // Usuários em trial (sistema interno, ativo, não expirado)
-    const { count: trialUsers } = await supabaseAdmin
+    const paidCustomerIds = (activeSubs || []).map(s => s.customer_id)
+    let paidUserIds: string[] = []
+
+    if (paidCustomerIds.length > 0) {
+      const { data: paidCustomers } = await supabaseAdmin
+        .from('stripe_customers')
+        .select('user_id')
+        .in('id', paidCustomerIds)
+      paidUserIds = (paidCustomers || []).map(c => c.user_id as string)
+    }
+
+    const paidCount = paidUserIds.length
+
+    // Usuários em trial excluindo os que já são pagos
+    let trialQuery = supabaseAdmin
       .from('user_subscriptions')
-      .select('*', { count: 'exact', head: true })
+      .select('user_id', { count: 'exact', head: true })
       .eq('is_trial', true)
       .eq('status', 'active')
       .gt('end_date', new Date().toISOString())
 
-    const paidCount = paidUsers || 0
-    const trialCount = trialUsers || 0
+    if (paidUserIds.length > 0) {
+      trialQuery = trialQuery.not('user_id', 'in', `(${paidUserIds.join(',')})`)
+    }
+
+    const { count: trialUsersCount, error: trialError } = await trialQuery
+    if (trialError) console.error('Erro ao contar trial users:', trialError)
+    const trialCount = trialUsersCount || 0
     const freeUsers = Math.max(0, totalUsers - paidCount - trialCount)
 
     return NextResponse.json({
