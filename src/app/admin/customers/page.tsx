@@ -36,7 +36,6 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
-import { createClient } from '@/lib/supabase/client'
 import AdminLayout from '@/components/admin/AdminLayout'
 
 interface Customer {
@@ -47,8 +46,9 @@ interface Customer {
   created_at: string
   last_sign_in_at?: string
   is_active: boolean
-  subscription_status: 'active' | 'inactive' | 'trial' | 'expired'
-  total_projects: number
+  subscription_status: 'free' | 'trial' | 'paid'
+  plan_name: string | null
+  total_projects: number | null
   total_spent: number
   last_activity: string
 }
@@ -99,93 +99,52 @@ export default function CustomersPage() {
   const loadCustomers = async () => {
     setLoading(true)
     try {
-      const supabase = createClient()
-      
-      // Carregar usuários (simulado)
-      const mockCustomers: Customer[] = [
-        {
-          id: '1',
-          email: 'joao@exemplo.com',
-          full_name: 'João Silva',
-          created_at: '2024-01-15T10:30:00Z',
-          last_sign_in_at: '2024-01-20T14:22:00Z',
-          is_active: true,
-          subscription_status: 'active',
-          total_projects: 12,
-          total_spent: 299.90,
-          last_activity: '2024-01-20T14:22:00Z'
-        },
-        {
-          id: '2',
-          email: 'maria@exemplo.com',
-          full_name: 'Maria Santos',
-          created_at: '2024-01-10T09:15:00Z',
-          last_sign_in_at: '2024-01-19T16:45:00Z',
-          is_active: true,
-          subscription_status: 'trial',
-          total_projects: 3,
-          total_spent: 0,
-          last_activity: '2024-01-19T16:45:00Z'
-        },
-        {
-          id: '3',
-          email: 'carlos@exemplo.com',
-          full_name: 'Carlos Oliveira',
-          created_at: '2023-12-20T11:20:00Z',
-          last_sign_in_at: '2024-01-18T13:10:00Z',
-          is_active: false,
-          subscription_status: 'expired',
-          total_projects: 8,
-          total_spent: 149.90,
-          last_activity: '2024-01-18T13:10:00Z'
-        },
-        {
-          id: '4',
-          email: 'ana@exemplo.com',
-          full_name: 'Ana Costa',
-          created_at: '2024-01-12T14:30:00Z',
-          last_sign_in_at: '2024-01-20T10:15:00Z',
-          is_active: true,
-          subscription_status: 'active',
-          total_projects: 15,
-          total_spent: 599.80,
-          last_activity: '2024-01-20T10:15:00Z'
-        },
-        {
-          id: '5',
-          email: 'pedro@exemplo.com',
-          full_name: 'Pedro Ferreira',
-          created_at: '2024-01-08T08:45:00Z',
-          last_sign_in_at: '2024-01-17T12:30:00Z',
-          is_active: true,
-          subscription_status: 'inactive',
-          total_projects: 2,
-          total_spent: 0,
-          last_activity: '2024-01-17T12:30:00Z'
-        }
-      ]
-      
-      setCustomers(mockCustomers)
-      
-      // Calcular estatísticas
-      const totalCustomers = mockCustomers.length
-      const activeCustomers = mockCustomers.filter(c => c.is_active).length
-      const trialCustomers = mockCustomers.filter(c => c.subscription_status === 'trial').length
-      const totalRevenue = mockCustomers.reduce((sum, c) => sum + c.total_spent, 0)
-      const averageProjectsPerUser = mockCustomers.reduce((sum, c) => sum + c.total_projects, 0) / totalCustomers
-      const newCustomersThisMonth = mockCustomers.filter(c => 
-        new Date(c.created_at).getMonth() === new Date().getMonth()
+      const response = await fetch('/api/admin/users?limit=50&offset=0')
+      if (!response.ok) throw new Error('Falha ao carregar clientes')
+
+      const data = await response.json()
+      const loaded: Customer[] = (data.users || []).map((u: {
+        id: string
+        email: string
+        created_at: string
+        last_sign_in_at: string | null
+        subscription_status: 'free' | 'trial' | 'paid'
+        plan_name: string | null
+        total_spent: number
+      }) => ({
+        id: u.id,
+        email: u.email,
+        full_name: undefined,
+        created_at: u.created_at,
+        last_sign_in_at: u.last_sign_in_at ?? undefined,
+        is_active: true,
+        subscription_status: u.subscription_status,
+        plan_name: u.plan_name,
+        total_projects: null,
+        total_spent: u.total_spent / 100,
+        last_activity: u.last_sign_in_at ?? u.created_at
+      }))
+
+      setCustomers(loaded)
+
+      const totalCustomers = loaded.length
+      const paidCustomers = loaded.filter(c => c.subscription_status === 'paid').length
+      const trialCustomers = loaded.filter(c => c.subscription_status === 'trial').length
+      const activeCustomers = paidCustomers + trialCustomers
+      const totalRevenue = loaded.reduce((sum, c) => sum + c.total_spent, 0)
+      const newCustomersThisMonth = loaded.filter(c =>
+        new Date(c.created_at).getMonth() === new Date().getMonth() &&
+        new Date(c.created_at).getFullYear() === new Date().getFullYear()
       ).length
-      
+
       setStats({
         totalCustomers,
         activeCustomers,
         trialCustomers,
         totalRevenue,
-        averageProjectsPerUser,
+        averageProjectsPerUser: 0,
         newCustomersThisMonth
       })
-      
     } catch (error) {
       console.error('Erro ao carregar clientes:', error)
       setError('Erro ao carregar clientes')
@@ -282,19 +241,14 @@ export default function CustomersPage() {
   }
 
   const getStatusBadge = (customer: Customer) => {
-    if (!customer.is_active) {
-      return <Badge variant="secondary" className="bg-red-100 text-red-800">Inativo</Badge>
-    }
-    
     switch (customer.subscription_status) {
-      case 'active':
-        return <Badge className="bg-green-100 text-green-800">Ativo</Badge>
+      case 'paid':
+        return <Badge className="bg-green-100 text-green-800">Pago</Badge>
       case 'trial':
         return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Trial</Badge>
-      case 'expired':
-        return <Badge variant="secondary" className="bg-orange-100 text-orange-800">Expirado</Badge>
+      case 'free':
       default:
-        return <Badge variant="secondary">Inativo</Badge>
+        return <Badge variant="secondary" className="bg-gray-100 text-gray-600">Gratuito</Badge>
     }
   }
 
@@ -477,10 +431,9 @@ export default function CustomersPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="active">Ativa</SelectItem>
+                    <SelectItem value="paid">Pago</SelectItem>
                     <SelectItem value="trial">Trial</SelectItem>
-                    <SelectItem value="inactive">Inativa</SelectItem>
-                    <SelectItem value="expired">Expirada</SelectItem>
+                    <SelectItem value="free">Gratuito</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -545,7 +498,7 @@ export default function CustomersPage() {
                         {getStatusBadge(customer)}
                       </td>
                       <td className="py-4 px-4">
-                        <span className="font-medium">{customer.total_projects}</span>
+                        <span className="font-medium">{customer.total_projects ?? '—'}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className="font-medium">
@@ -689,7 +642,7 @@ export default function CustomersPage() {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Total de Projetos:</span>
-                      <span className="font-medium">{selectedCustomer.total_projects}</span>
+                      <span className="font-medium">{selectedCustomer.total_projects ?? '—'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Gasto Total:</span>
@@ -698,8 +651,8 @@ export default function CustomersPage() {
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Status Assinatura:</span>
-                      <span className="capitalize">{selectedCustomer.subscription_status}</span>
+                      <span className="text-gray-600">Plano:</span>
+                      <span>{selectedCustomer.plan_name ?? selectedCustomer.subscription_status}</span>
                     </div>
                   </div>
                 </div>
