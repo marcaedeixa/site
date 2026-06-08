@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
-  Users, 
-  Settings, 
-  BarChart3, 
-  Shield, 
+  Users,
+  Settings,
+  BarChart3,
+  Shield,
   LogOut,
   RefreshCw,
   CreditCard,
@@ -15,7 +15,9 @@ import {
   CheckCircle,
   Menu,
   X,
-  Eye
+  Eye,
+  UserMinus,
+  Clock
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAdminAuth } from '@/hooks/useAdminAuth'
@@ -45,7 +47,10 @@ export default function AdminPage() {
     activeUsers: 0,
     systemStatus: 'operational',
     todayLogins: 0,
-    weeklyGrowth: 0
+    weeklyGrowth: 0,
+    freeUsers: 0,
+    trialUsers: 0,
+    paidUsers: 0
   })
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<User[]>([])
@@ -103,7 +108,10 @@ export default function AdminPage() {
           activeUsers: 12,
           systemStatus: 'operational',
           todayLogins: 5,
-          weeklyGrowth: 12.5
+          weeklyGrowth: 12.5,
+          freeUsers: 0,
+          trialUsers: 0,
+          paidUsers: 0
         })
       }
       
@@ -140,7 +148,10 @@ export default function AdminPage() {
         activeUsers: 0,
         systemStatus: 'error',
         todayLogins: 0,
-        weeklyGrowth: 0
+        weeklyGrowth: 0,
+        freeUsers: 0,
+        trialUsers: 0,
+        paidUsers: 0
       })
       setUsers([])
       setProjects([])
@@ -423,6 +434,54 @@ export default function AdminPage() {
                   </div>
                   <div className="p-3 bg-orange-100 rounded-lg">
                     <Shield className="h-6 w-6 text-orange-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Separação Gratuito / Trial / Pago */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Gratuitos</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.freeUsers}</p>
+                    <p className="text-sm text-gray-500 mt-1">Sem assinatura ativa</p>
+                  </div>
+                  <div className="p-3 bg-gray-100 rounded-lg">
+                    <UserMinus className="h-6 w-6 text-gray-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Em Trial</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.trialUsers}</p>
+                    <p className="text-sm text-gray-500 mt-1">Trial ativo (3 dias)</p>
+                  </div>
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <Clock className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Pagos</p>
+                    <p className="text-3xl font-bold text-gray-900">{stats.paidUsers}</p>
+                    <p className="text-sm text-gray-500 mt-1">Assinatura Stripe ativa</p>
+                  </div>
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <CreditCard className="h-6 w-6 text-green-600" />
                   </div>
                 </div>
               </CardContent>
