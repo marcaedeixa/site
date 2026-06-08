@@ -481,7 +481,7 @@ export default function CustomersPage() {
                     <tr key={customer.id} className="border-b hover:bg-gray-50">
                       <td className="py-4 px-4">
                         <div
-                          className="flex items-center cursor-pointer"
+                          className="flex items-center cursor-pointer group"
                           onClick={() => setSelectedCustomer(customer)}
                         >
                           <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
@@ -490,7 +490,7 @@ export default function CustomersPage() {
                             </span>
                           </div>
                           <div>
-                            <p className="font-medium text-gray-900 hover:text-blue-600">{customer.full_name || 'Nome não informado'}</p>
+                            <p className="font-medium text-gray-900 group-hover:text-blue-600">{customer.full_name || 'Nome não informado'}</p>
                             <p className="text-sm text-gray-500">{customer.email}</p>
                           </div>
                         </div>
