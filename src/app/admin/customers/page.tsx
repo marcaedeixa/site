@@ -16,12 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   MoreHorizontal,
-  Calendar,
   CreditCard,
   Activity,
   AlertTriangle,
   CheckCircle,
-  Clock,
   TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -310,14 +308,18 @@ export default function CustomersPage() {
           </Alert>
         )}
 
-        {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-6 mb-8">
+        {/* Stats — Linha 1: 4 KPIs principais */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Total de Clientes */}
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total de Clientes</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalUsers}</p>
+                  <p className={`text-xs mt-1 ${stats.newThisWeek > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                    {stats.newThisWeek > 0 ? `+${stats.newThisWeek} esta semana` : 'Sem novos esta semana'}
+                  </p>
                 </div>
                 <div className="p-3 bg-blue-100 rounded-lg">
                   <Users className="h-6 w-6 text-blue-600" />
@@ -325,42 +327,15 @@ export default function CustomersPage() {
               </div>
             </CardContent>
           </Card>
-          
+
+          {/* Receita do Mês */}
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Clientes Ativos</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.activeCustomers}</p>
-                </div>
-                <div className="p-3 bg-green-100 rounded-lg">
-                  <UserCheck className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Em Trial</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.trialCustomers}</p>
-                </div>
-                <div className="p-3 bg-purple-100 rounded-lg">
-                  <Clock className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Receita Total</p>
+                  <p className="text-sm font-medium text-gray-600">Receita do Mês</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    R$ {stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {(stats.mrr / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="p-3 bg-orange-100 rounded-lg">
@@ -369,30 +344,123 @@ export default function CustomersPage() {
               </div>
             </CardContent>
           </Card>
-          
+
+          {/* Taxa de Conversão */}
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Média Projetos</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.averageProjectsPerUser.toFixed(1)}</p>
+                  <p className="text-sm font-medium text-gray-600">Taxa de Conversão</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {stats.totalUsers > 0
+                      ? Math.round((stats.paidUsers / stats.totalUsers) * 100)
+                      : 0}%
+                  </p>
+                  <p className="text-xs mt-1 text-gray-400">{stats.paidUsers} pagantes</p>
                 </div>
-                <div className="p-3 bg-red-100 rounded-lg">
-                  <Activity className="h-6 w-6 text-red-600" />
+                <div className="p-3 bg-green-100 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-green-600" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          
+
+          {/* Trials Expirando */}
+          <Card
+            className={`transition-colors ${stats.trialsExpiringSoon > 0 ? 'cursor-pointer hover:bg-amber-50' : ''}`}
+            onClick={() => stats.trialsExpiringSoon > 0 && setSubscriptionFilter('trial')}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Trials Expirando</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.trialsExpiringSoon}</p>
+                  <p className="text-xs mt-1 text-gray-400">próximos 7 dias</p>
+                </div>
+                <div className={`p-3 rounded-lg ${
+                  stats.trialsExpiringSoon === 0
+                    ? 'bg-gray-100'
+                    : stats.trialsExpiringSoon <= 5
+                    ? 'bg-yellow-100'
+                    : 'bg-orange-100'
+                }`}>
+                  <AlertTriangle className={`h-6 w-6 ${
+                    stats.trialsExpiringSoon === 0
+                      ? 'text-gray-400'
+                      : stats.trialsExpiringSoon <= 5
+                      ? 'text-yellow-600'
+                      : 'text-orange-600'
+                  }`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Stats — Linha 2: Funil + Atividade */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {/* Funil de Conversão */}
+          <Card className="md:col-span-2">
+            <CardContent className="p-6">
+              <p className="text-sm font-medium text-gray-600 mb-4">Funil de Conversão</p>
+              {[
+                { label: 'Gratuito', count: stats.freeUsers, color: 'bg-gray-400' },
+                { label: 'Trial', count: stats.trialUsers, color: 'bg-blue-400' },
+                { label: 'Pago', count: stats.paidUsers, color: 'bg-green-500' },
+              ].map(({ label, count, color }) => {
+                const pct = stats.totalUsers > 0
+                  ? Math.round((count / stats.totalUsers) * 100)
+                  : 0
+                return (
+                  <div key={label} className="mb-3 last:mb-0">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-gray-700">{label}</span>
+                      <span className="font-medium text-gray-900">
+                        {count}{' '}
+                        <span className="text-gray-400 font-normal">({pct}%)</span>
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className={`${color} h-2 rounded-full transition-all`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </CardContent>
+          </Card>
+
+          {/* Crescimento Semanal */}
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Novos (Mês)</p>
-                  <p className="text-2xl font-bold text-gray-900">{stats.newCustomersThisMonth}</p>
+                  <p className="text-sm font-medium text-gray-600">Crescimento Semanal</p>
+                  <p className={`text-2xl font-bold ${stats.weeklyGrowth >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {stats.weeklyGrowth >= 0 ? '+' : ''}{stats.weeklyGrowth}%
+                  </p>
+                  <p className="text-xs mt-1 text-gray-400">vs. semana anterior</p>
+                </div>
+                <div className={`p-3 rounded-lg ${stats.weeklyGrowth >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                  <TrendingUp className={`h-6 w-6 ${stats.weeklyGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Logins Hoje */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Logins Hoje</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.todayLogins}</p>
+                  <p className="text-xs mt-1 text-gray-400">usuários únicos</p>
                 </div>
                 <div className="p-3 bg-indigo-100 rounded-lg">
-                  <Calendar className="h-6 w-6 text-indigo-600" />
+                  <Activity className="h-6 w-6 text-indigo-600" />
                 </div>
               </div>
             </CardContent>
