@@ -231,7 +231,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
       const { error } = await supabase
         .from('admin_users')
-        .update({ 
+        .update({
           locked_until: null,
           login_attempts: 0
         })

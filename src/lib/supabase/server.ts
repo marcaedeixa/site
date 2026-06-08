@@ -1,17 +1,29 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export async function createClient(useServiceRole: boolean = false) {
+  // Service role: usa @supabase/supabase-js diretamente, sem cookies.
+  // createServerClient injeta o JWT do usuário logado nos headers PostgREST,
+  // fazendo o RLS filtrar os dados mesmo com a service role key.
+  if (useServiceRole) {
+    return createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    )
+  }
+
   const cookieStore = await cookies()
-  
-  // Escolher a chave apropriada
-  const supabaseKey = useServiceRole 
-    ? process.env.SUPABASE_SERVICE_ROLE_KEY!
-    : process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    supabaseKey,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         getAll() {
