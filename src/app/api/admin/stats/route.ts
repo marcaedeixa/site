@@ -126,7 +126,7 @@ export async function GET() {
       .eq('status', 'succeeded')
       .gte('created_at', startOfMonth.toISOString())
     const mrr = (monthlyPaymentsData || []).reduce(
-      (sum, p) => sum + (p.amount as number), 0
+      (sum, p) => sum + (Number(p.amount) || 0), 0
     )
 
     return NextResponse.json({
