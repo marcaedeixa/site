@@ -96,7 +96,7 @@ export async function GET() {
       .gt('end_date', new Date().toISOString())
 
     if (paidUserIds.length > 0) {
-      trialQuery = trialQuery.not('user_id', 'in', `(${paidUserIds.join(',')})`)
+      trialQuery = trialQuery.not('user_id', 'in', `(${paidUserIds.map(id => `"${id}"`).join(',')})`)
     }
 
     const { count: trialUsersCount, error: trialError } = await trialQuery

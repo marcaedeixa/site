@@ -5,8 +5,10 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
     const { searchParams } = new URL(request.url)
-    const limit = parseInt(searchParams.get('limit') || '10')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    const rawLimit = parseInt(searchParams.get('limit') || '10')
+    const rawOffset = parseInt(searchParams.get('offset') || '0')
+    const limit = Math.min(Math.max(isNaN(rawLimit) ? 10 : rawLimit, 1), 100)
+    const offset = Math.max(isNaN(rawOffset) ? 0 : rawOffset, 0)
 
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
