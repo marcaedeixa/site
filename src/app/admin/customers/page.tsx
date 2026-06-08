@@ -2,26 +2,27 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
-  Users, 
-  Search, 
-  Filter, 
-  Download, 
+import {
+  Users,
+  Search,
+  Filter,
+  Download,
   Eye,
   Trash2,
-  UserCheck, 
-  UserX, 
-  RefreshCw, 
-  ArrowLeft, 
-  ChevronLeft, 
-  ChevronRight, 
+  UserCheck,
+  UserX,
+  RefreshCw,
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   MoreHorizontal,
   Calendar,
   CreditCard,
   Activity,
   AlertTriangle,
   CheckCircle,
-  Clock
+  Clock,
+  TrendingUp
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -52,24 +53,30 @@ interface Customer {
 }
 
 interface CustomerStats {
-  totalCustomers: number
-  activeCustomers: number
-  trialCustomers: number
-  totalRevenue: number
-  averageProjectsPerUser: number
-  newCustomersThisMonth: number
+  totalUsers: number
+  mrr: number
+  paidUsers: number
+  trialUsers: number
+  freeUsers: number
+  trialsExpiringSoon: number
+  weeklyGrowth: number
+  todayLogins: number
+  newThisWeek: number
 }
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([])
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([])
   const [stats, setStats] = useState<CustomerStats>({
-    totalCustomers: 0,
-    activeCustomers: 0,
-    trialCustomers: 0,
-    totalRevenue: 0,
-    averageProjectsPerUser: 0,
-    newCustomersThisMonth: 0
+    totalUsers: 0,
+    mrr: 0,
+    paidUsers: 0,
+    trialUsers: 0,
+    freeUsers: 0,
+    trialsExpiringSoon: 0,
+    weeklyGrowth: 0,
+    todayLogins: 0,
+    newThisWeek: 0,
   })
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -86,6 +93,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     if (adminUser) {
+      loadStats()
       loadCustomers()
     }
   }, [adminUser])
@@ -93,6 +101,27 @@ export default function CustomersPage() {
   useEffect(() => {
     filterCustomers()
   }, [customers, searchTerm, statusFilter, subscriptionFilter])
+
+  const loadStats = async () => {
+    try {
+      const response = await fetch('/api/admin/stats')
+      if (!response.ok) throw new Error('Falha ao carregar estatísticas')
+      const data = await response.json()
+      setStats({
+        totalUsers: data.totalUsers ?? 0,
+        mrr: data.mrr ?? 0,
+        paidUsers: data.paidUsers ?? 0,
+        trialUsers: data.trialUsers ?? 0,
+        freeUsers: data.freeUsers ?? 0,
+        trialsExpiringSoon: data.trialsExpiringSoon ?? 0,
+        weeklyGrowth: data.weeklyGrowth ?? 0,
+        todayLogins: data.todayLogins ?? 0,
+        newThisWeek: data.newThisWeek ?? 0,
+      })
+    } catch (error) {
+      console.error('Erro ao carregar estatísticas:', error)
+    }
+  }
 
   const loadCustomers = async () => {
     setLoading(true)
@@ -124,25 +153,6 @@ export default function CustomersPage() {
       }))
 
       setCustomers(loaded)
-
-      const totalCustomers = loaded.length
-      const paidCustomers = loaded.filter(c => c.subscription_status === 'paid').length
-      const trialCustomers = loaded.filter(c => c.subscription_status === 'trial').length
-      const activeCustomers = paidCustomers + trialCustomers
-      const totalRevenue = loaded.reduce((sum, c) => sum + c.total_spent, 0)
-      const newCustomersThisMonth = loaded.filter(c =>
-        new Date(c.created_at).getMonth() === new Date().getMonth() &&
-        new Date(c.created_at).getFullYear() === new Date().getFullYear()
-      ).length
-
-      setStats({
-        totalCustomers,
-        activeCustomers,
-        trialCustomers,
-        totalRevenue,
-        averageProjectsPerUser: 0,
-        newCustomersThisMonth
-      })
     } catch (error) {
       console.error('Erro ao carregar clientes:', error)
       setError('Erro ao carregar clientes')
