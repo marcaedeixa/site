@@ -19,21 +19,21 @@ function AdminLoginContent() {
   const [error, setError] = useState('')
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null)
   const recaptchaRef = useRef<ReCAPTCHA>(null)
-  
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const { signIn, adminUser } = useAdminAuth()
-  
+
   const redirectUrl = searchParams.get('redirect') || '/admin'
   const urlError = searchParams.get('error')
-  
+
   useEffect(() => {
     // Se já está autenticado, redirecionar
     if (adminUser) {
       router.push(redirectUrl)
     }
   }, [adminUser, router, redirectUrl])
-  
+
   useEffect(() => {
     // Mostrar erro da URL
     if (urlError) {
@@ -49,26 +49,26 @@ function AdminLoginContent() {
       }
     }
   }, [urlError])
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!email || !password) {
       setError('Por favor, preencha todos os campos')
       return
     }
-    
-    if (!recaptchaToken && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+
+    if (recaptchaToken === null && !!process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
       setError('Por favor, complete a verificação reCAPTCHA')
       return
     }
-    
+
     setLoading(true)
     setError('')
-    
+
     try {
       const { data, error: loginError } = await signIn(email, password, recaptchaToken)
-      
+
       if (loginError) {
         setError(loginError.message)
         // Reset reCAPTCHA em caso de erro
@@ -86,14 +86,14 @@ function AdminLoginContent() {
       setLoading(false)
     }
   }
-  
+
   const handleRecaptchaChange = (token: string | null) => {
     setRecaptchaToken(token)
     if (token) {
       setError('') // Limpar erro quando reCAPTCHA for completado
     }
   }
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -105,7 +105,7 @@ function AdminLoginContent() {
           <h1 className="text-3xl font-bold text-white mb-2">Marca e Deixa</h1>
           <p className="text-purple-200">Painel Administrativo</p>
         </div>
-        
+
         <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur">
           <CardHeader className="space-y-1 pb-6">
             <CardTitle className="text-2xl font-bold text-center text-gray-900">
@@ -115,7 +115,7 @@ function AdminLoginContent() {
               Acesse o painel de administração do sistema
             </CardDescription>
           </CardHeader>
-          
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Campo Email */}
@@ -135,7 +135,7 @@ function AdminLoginContent() {
                   required
                 />
               </div>
-              
+
               {/* Campo Senha */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-gray-700">
@@ -169,20 +169,20 @@ function AdminLoginContent() {
                   </Button>
                 </div>
               </div>
-              
+
               {/* reCAPTCHA */}
               {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && (
-              <div className="flex justify-center py-2">
-                <ReCAPTCHA
-                  ref={recaptchaRef}
-                  sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ''}
-                  onChange={handleRecaptchaChange}
-                  theme="light"
-                  size="normal"
-                />
-              </div>
+                <div className="flex justify-center py-2">
+                  <ReCAPTCHA
+                    ref={recaptchaRef}
+                    sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ''}
+                    onChange={handleRecaptchaChange}
+                    theme="light"
+                    size="normal"
+                  />
+                </div>
               )}
-              
+
               {/* Mensagem de Erro */}
               {error && (
                 <Alert variant="destructive" className="border-red-200 bg-red-50">
@@ -192,7 +192,7 @@ function AdminLoginContent() {
                   </AlertDescription>
                 </Alert>
               )}
-              
+
               {/* Botão de Login */}
               <Button
                 type="submit"
@@ -209,7 +209,7 @@ function AdminLoginContent() {
                 )}
               </Button>
             </form>
-            
+
             {/* Informações de Segurança */}
             <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-start space-x-3">
@@ -224,7 +224,7 @@ function AdminLoginContent() {
                 </div>
               </div>
             </div>
-            
+
             {/* Credenciais Padrão (apenas para desenvolvimento) */}
             {process.env.NODE_ENV === 'development' && (
               <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
@@ -237,7 +237,7 @@ function AdminLoginContent() {
             )}
           </CardContent>
         </Card>
-        
+
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-purple-200">

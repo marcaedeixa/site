@@ -43,24 +43,7 @@ async function getSupabase() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, recaptchaToken } = await request.json()
-
-    // Verificar reCAPTCHA (skip in dev without key)
-    if (process.env.RECAPTCHA_SECRET_KEY) {
-      const recaptchaResponse = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${recaptchaToken}`
-      })
-
-      const recaptchaData = await recaptchaResponse.json()
-      if (!recaptchaData.success) {
-        return NextResponse.json(
-          { error: 'Falha na verificação do reCAPTCHA' },
-          { status: 400 }
-        )
-      }
-    }
+    const { email, password } = await request.json()
 
     // Buscar usuário admin usando service role
     const supabaseAdmin = getSupabaseAdmin()
@@ -96,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Verificar senha
     const passwordMatch = await bcrypt.compare(password, adminUserData.password_hash)
-    
+
     if (!passwordMatch) {
       await incrementFailedAttempts(adminUserData.id)
       await logFailedAttempt(email, 'INVALID_PASSWORD')
@@ -117,7 +100,7 @@ export async function POST(request: NextRequest) {
       .eq('id', adminUserData.id)
 
     const tempPassword = `Adm!${adminUserData.id.replace(/-/g, '').slice(0, 12)}#Session2026`
-    
+
     // Tentar fazer login primeiro (caso o usuário já exista no auth)
     const supabase = await getSupabase()
     let authData

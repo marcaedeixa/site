@@ -16,7 +16,7 @@ interface AdminUser {
 interface AdminAuthContextType {
   adminUser: AdminUser | null
   loading: boolean
-  signIn: (email: string, password: string, recaptchaToken: string) => Promise<{ data?: AdminUser | null; error?: Error | null }>
+  signIn: (email: string, password: string, recaptchaToken?: string | null) => Promise<{ data?: AdminUser | null; error?: Error | null }>
   signOut: () => Promise<void>
   updateProfile: (updates: { name?: string; email?: string }) => Promise<{ data?: AdminUser | null; error?: Error | null }>
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ data?: boolean; error?: Error | null }>
@@ -88,7 +88,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signIn = async (email: string, password: string, recaptchaToken: string) => {
+  const signIn = async (email: string, password: string, recaptchaToken?: string | null) => {
     try {
       setLoading(true)
 
