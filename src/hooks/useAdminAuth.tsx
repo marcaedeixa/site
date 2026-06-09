@@ -47,7 +47,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === 'SIGNED_IN' && session) {
-          await loadAdminUser(session.user.id)
+          await loadAdminUser(session.user)
         } else if (event === 'SIGNED_OUT') {
           setAdminUser(null)
         }
@@ -62,7 +62,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        await loadAdminUser(session.user.id)
+        await loadAdminUser(session.user)
       }
     } catch (error) {
       console.error('Erro ao obter sessão:', error)
@@ -71,12 +71,13 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const loadAdminUser = async (userId: string) => {
+  const loadAdminUser = async (authUser: User) => {
     try {
+      const adminId = authUser.user_metadata?.admin_id ?? authUser.id
       const { data, error } = await supabase
         .from('admin_users')
         .select('id, email, name, role, is_active, last_login')
-        .eq('id', userId)
+        .eq('id', adminId)
         .eq('is_active', true)
         .single()
 
