@@ -481,7 +481,15 @@ function CheckoutContent() {
                     </div>
 
                     <p className="text-xs text-gray-400 text-center mt-4">
-                      Ao continuar, você concorda com nossos Termos de Uso e Política de Privacidade
+                      Ao continuar, você concorda com nossos{' '}
+                      <a href="/termos-de-uso" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+                        Termos de Uso
+                      </a>{' '}
+                      e nossa{' '}
+                      <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">
+                        Política de Privacidade
+                      </a>
+                      .
                     </p>
                   </div>
                 </div>

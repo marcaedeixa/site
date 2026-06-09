@@ -171,14 +171,28 @@ export default function LoginPage() {
               {isLogin ? 'Entrar' : 'Criar conta'}
             </Button>
 
+            {!isLogin && (
+              <p className="text-center text-xs text-muted-foreground">
+                Ao criar sua conta, você concorda com nossos{' '}
+                <a href="/termos-de-uso" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                  Termos de Uso
+                </a>{' '}
+                e nossa{' '}
+                <a href="/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                  Política de Privacidade
+                </a>
+                .
+              </p>
+            )}
+
             <div className="text-center">
               <Button
                 type="button"
                 variant="link"
                 onClick={() => setIsLogin(!isLogin)}
               >
-                {isLogin 
-                  ? 'Não tem uma conta? Cadastre-se' 
+                {isLogin
+                  ? 'Não tem uma conta? Cadastre-se'
                   : 'Já tem uma conta? Entre'
                 }
               </Button>

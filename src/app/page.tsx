@@ -534,8 +534,8 @@ export default function Home() {
               &copy; 2024 Marca e Deixa. Todos os direitos reservados.
             </p>
             <div className="flex gap-6 mt-4 md:mt-0">
-              <a href="#" className="text-gray-500 hover:text-white text-sm transition-colors">Termos</a>
-              <a href="#" className="text-gray-500 hover:text-white text-sm transition-colors">Privacidade</a>
+              <a href="/termos-de-uso" className="text-gray-500 hover:text-white text-sm transition-colors">Termos de Uso</a>
+              <a href="/politica-de-privacidade" className="text-gray-500 hover:text-white text-sm transition-colors">Privacidade</a>
             </div>
           </div>
         </div>
