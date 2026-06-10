@@ -4,6 +4,14 @@ import { createServerClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { checkStripeSubscription } from '@/middleware/stripeSubscription'
 
+function createServiceRoleClient() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { cookies: { get: () => undefined, set: () => {}, remove: () => {} } }
+  )
+}
+
 // Rotas que requerem autenticação administrativa
 const adminRoutes = ['/admin']
 // Rotas públicas do admin (login)
@@ -63,23 +71,24 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl)
       }
       
-      // Verificar se o usuário é admin
-      const { data: adminUser, error: adminError } = await supabase
+      // Verificar se o usuário é admin usando service role (bypassa RLS)
+      const supabaseAdmin = createServiceRoleClient()
+      const { data: adminUser, error: adminError } = await supabaseAdmin
         .from('admin_users')
         .select('id, email, role, is_active')
-        .eq('id', session.user.id)
+        .eq('email', session.user.email)
         .eq('is_active', true)
         .single()
-      
+
       if (adminError || !adminUser) {
         // Usuário não é admin ou não está ativo
         const loginUrl = new URL('/admin/login', request.url)
         loginUrl.searchParams.set('error', 'unauthorized')
         return NextResponse.redirect(loginUrl)
       }
-      
+
       // Log de acesso administrativo
-      await logAdminAccess(supabase, adminUser.id, pathname, request)
+      await logAdminAccess(supabaseAdmin, adminUser.id, pathname, request)
       
       // Adicionar headers com informações do admin
       response.headers.set('x-admin-user-id', adminUser.id)
@@ -103,10 +112,11 @@ export async function middleware(request: NextRequest) {
       const { data: { session } } = await supabase.auth.getSession()
       
       if (session) {
-        const { data: adminUser } = await supabase
+        const supabaseAdmin = createServiceRoleClient()
+        const { data: adminUser } = await supabaseAdmin
           .from('admin_users')
           .select('id')
-          .eq('id', session.user.id)
+          .eq('email', session.user.email)
           .eq('is_active', true)
           .single()
         
