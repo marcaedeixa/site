@@ -71,17 +71,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const loadAdminUser = async (authUser: User) => {
+  const loadAdminUser = async (_authUser: User) => {
     try {
-      const adminId = authUser.user_metadata?.admin_id ?? authUser.id
-      const { data, error } = await supabase
-        .from('admin_users')
-        .select('id, email, name, role, is_active, last_login')
-        .eq('id', adminId)
-        .eq('is_active', true)
-        .single()
-
-      if (error) throw error
+      const response = await fetch('/api/admin/me')
+      if (!response.ok) throw new Error('Não autorizado')
+      const data = await response.json()
       setAdminUser(data)
     } catch (error) {
       console.error('Erro ao carregar usuário admin:', error)
@@ -168,33 +162,15 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     try {
       if (!adminUser) throw new Error('Usuário não autenticado')
 
-      // Verificar senha atual
-      const { data: userData, error: fetchError } = await supabase
-        .from('admin_users')
-        .select('password_hash')
-        .eq('id', adminUser.id)
-        .single()
+      const response = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
 
-      if (fetchError || !userData) throw new Error('Erro ao verificar senha atual')
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Erro ao trocar senha')
 
-      const passwordMatch = await bcrypt.compare(currentPassword, userData.password_hash)
-      if (!passwordMatch) {
-        throw new Error('Senha atual incorreta')
-      }
-
-      // Hash da nova senha
-      const saltRounds = 12
-      const newPasswordHash = await bcrypt.hash(newPassword, saltRounds)
-
-      // Atualizar senha
-      const { error: updateError } = await supabase
-        .from('admin_users')
-        .update({ password_hash: newPasswordHash })
-        .eq('id', adminUser.id)
-
-      if (updateError) throw updateError
-
-      await logAdminAction(adminUser.id, 'PASSWORD_CHANGE')
       return { data: true, error: null }
     } catch (error) {
       return { data: false, error: error as Error }
