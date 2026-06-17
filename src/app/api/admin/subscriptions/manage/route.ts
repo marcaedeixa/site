@@ -71,14 +71,18 @@ export async function POST(request: NextRequest) {
       const result = await cancelSubscription(stripeSubscriptionId, true)
 
       // Atualiza flag local no banco
-      await supabase
+      const { error: cancelUpdateError } = await supabase
         .from('stripe_subscriptions')
         .update({ cancel_at_period_end: true })
         .eq('stripe_subscription_id', stripeSubscriptionId)
+      if (cancelUpdateError) {
+        console.error('Failed to update cancel_at_period_end locally:', cancelUpdateError)
+      }
 
       return NextResponse.json({
         success: true,
         cancelAtPeriodEnd: result.cancel_at_period_end,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         currentPeriodEnd: (result as any).current_period_end
           ? new Date((result as any).current_period_end * 1000).toISOString()
           : null,
@@ -96,10 +100,13 @@ export async function POST(request: NextRequest) {
       const result = await updateSubscription(stripeSubscriptionId, newPriceId!)
 
       // Atualiza plan_id local no banco (plan_name será atualizado pelo webhook)
-      await supabase
+      const { error: planUpdateError } = await supabase
         .from('stripe_subscriptions')
         .update({ plan_id: newPriceId })
         .eq('stripe_subscription_id', stripeSubscriptionId)
+      if (planUpdateError) {
+        console.error('Failed to update plan_id locally:', planUpdateError)
+      }
 
       return NextResponse.json({
         success: true,
