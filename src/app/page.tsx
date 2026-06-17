@@ -18,12 +18,14 @@ import {
   X
 } from 'lucide-react'
 import PricingSection from '@/components/stripe/PricingSection'
+import { extractYouTubeEmbedUrl } from '@/lib/utils'
 
 export default function Home() {
   const router = useRouter()
   const { user } = useAuth()
   const [openFaq, setOpenFaq] = useState<number | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [heroVideoUrl, setHeroVideoUrl] = useState<string | null>(null)
 
   // Redireciona usuário logado pro dashboard
   useEffect(() => {
@@ -31,6 +33,16 @@ export default function Home() {
       router.push('/dashboard')
     }
   }, [user, router])
+
+  useEffect(() => {
+    fetch('/api/admin/landing-content?section=media')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        const embedUrl = extractYouTubeEmbedUrl(data?.content?.demo_video_url)
+        if (embedUrl) setHeroVideoUrl(embedUrl)
+      })
+      .catch(() => {})
+  }, [])
 
   const handleGetStarted = () => {
     if (user) {
@@ -258,53 +270,65 @@ export default function Home() {
 
             {/* Visual Element */}
             <div className="relative hidden lg:block">
-              <div className="relative">
-                {/* Main Card */}
-                <div className="bg-black rounded-3xl shadow-2xl overflow-hidden">
-                  <div className="bg-gray-900 px-6 py-4 flex items-center">
-                    <div className="flex gap-2">
-                      <div className="w-3 h-3 bg-red-500 rounded-full" />
-                      <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-                      <div className="w-3 h-3 bg-green-500 rounded-full" />
+              {heroVideoUrl ? (
+                <div className="rounded-3xl overflow-hidden shadow-2xl aspect-video">
+                  <iframe
+                    src={heroVideoUrl}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="Demo do Marca e Deixa"
+                  />
+                </div>
+              ) : (
+                <div className="relative">
+                  {/* Main Card */}
+                  <div className="bg-black rounded-3xl shadow-2xl overflow-hidden">
+                    <div className="bg-gray-900 px-6 py-4 flex items-center">
+                      <div className="flex gap-2">
+                        <div className="w-3 h-3 bg-red-500 rounded-full" />
+                        <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+                        <div className="w-3 h-3 bg-green-500 rounded-full" />
+                      </div>
+                    </div>
+                    <div className="hero-preview-animate aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 p-8">
+                      <div className="h-full border-2 border-dashed border-gray-700 rounded-2xl flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Play className="w-10 h-10 text-white" />
+                          </div>
+                          <p className="text-gray-400 font-medium">Seu projeto aqui</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="hero-preview-animate aspect-[4/3] bg-gradient-to-br from-gray-800 to-gray-900 p-8">
-                    <div className="h-full border-2 border-dashed border-gray-700 rounded-2xl flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <Play className="w-10 h-10 text-white" />
-                        </div>
-                        <p className="text-gray-400 font-medium">Seu projeto aqui</p>
+
+                  {/* Floating Elements */}
+                  <div className="absolute -top-6 -right-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                        <Sparkles className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-black">Salvo!</p>
+                        <p className="text-xs text-gray-500">Há 2 segundos</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="absolute -bottom-4 -left-4 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
+                        <Layers className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-black">12 cenas</p>
+                        <p className="text-xs text-gray-500">criadas hoje</p>
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Floating Elements */}
-                <div className="absolute -top-6 -right-6 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                      <Sparkles className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-black">Salvo!</p>
-                      <p className="text-xs text-gray-500">Há 2 segundos</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="absolute -bottom-4 -left-4 bg-white rounded-2xl shadow-xl p-4 border border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-                      <Layers className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-black">12 cenas</p>
-                      <p className="text-xs text-gray-500">criadas hoje</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
