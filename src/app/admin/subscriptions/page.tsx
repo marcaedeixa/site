@@ -85,7 +85,17 @@ export default function AdminSubscriptionsPage() {
   const [selectedSubscription, setSelectedSubscription] = useState<UserSubscription | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  
+  const [cancelConfirming, setCancelConfirming] = useState(false)
+  const [cancelLoading, setCancelLoading] = useState(false)
+  const [changingPlan, setChangingPlan] = useState(false)
+  const [changePlanLoading, setChangePlanLoading] = useState(false)
+  const [availablePrices, setAvailablePrices] = useState<Array<{
+    priceId: string
+    label: string
+    amount: number
+  }>>([])
+  const [selectedPriceId, setSelectedPriceId] = useState('')
+
   const router = useRouter()
   const { adminUser } = useAdminAuth()
   const supabase = createClient()
@@ -99,6 +109,43 @@ export default function AdminSubscriptionsPage() {
   useEffect(() => {
     filterSubscriptions()
   }, [subscriptions, searchTerm, statusFilter, planFilter])
+
+  useEffect(() => {
+    if (!selectedSubscription) {
+      setCancelConfirming(false)
+      setChangingPlan(false)
+      setSelectedPriceId('')
+      return
+    }
+
+    const isActive = selectedSubscription.status !== 'cancelled' && selectedSubscription.days_remaining > 0
+    if (!isActive) return
+
+    fetch('/api/stripe/prices')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.plans) return
+        const prices: Array<{ priceId: string; label: string; amount: number }> = []
+        for (const plan of data.plans) {
+          if (plan.prices?.monthly) {
+            prices.push({
+              priceId: plan.prices.monthly.priceId,
+              label: `${plan.name} — Mensal`,
+              amount: plan.prices.monthly.amount,
+            })
+          }
+          if (plan.prices?.yearly) {
+            prices.push({
+              priceId: plan.prices.yearly.priceId,
+              label: `${plan.name} — Anual`,
+              amount: plan.prices.yearly.amount,
+            })
+          }
+        }
+        setAvailablePrices(prices)
+      })
+      .catch(() => {})
+  }, [selectedSubscription])
 
   const loadData = async () => {
     setLoading(true)
@@ -296,6 +343,54 @@ export default function AdminSubscriptionsPage() {
       style: 'currency',
       currency: 'BRL'
     }).format(value)
+  }
+
+  const handleCancelSubscription = async () => {
+    if (!selectedSubscription) return
+    setCancelLoading(true)
+    try {
+      const res = await fetch('/api/admin/subscriptions/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedSubscription.user_id, action: 'cancel' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao cancelar')
+      setSuccess(`Assinatura de ${selectedSubscription.user_email} será cancelada ao fim do período.`)
+      setSelectedSubscription(null)
+      loadData()
+    } catch (err: any) {
+      setError(err.message || 'Erro ao cancelar assinatura')
+    } finally {
+      setCancelLoading(false)
+      setCancelConfirming(false)
+    }
+  }
+
+  const handleChangePlan = async () => {
+    if (!selectedSubscription || !selectedPriceId) return
+    setChangePlanLoading(true)
+    try {
+      const res = await fetch('/api/admin/subscriptions/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedSubscription.user_id,
+          action: 'change_plan',
+          newPriceId: selectedPriceId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao trocar plano')
+      setSuccess(`Plano de ${selectedSubscription.user_email} atualizado com sucesso.`)
+      setSelectedSubscription(null)
+      loadData()
+    } catch (err: any) {
+      setError(err.message || 'Erro ao trocar plano')
+    } finally {
+      setChangePlanLoading(false)
+      setChangingPlan(false)
+    }
   }
 
   if (!adminUser) {
@@ -550,6 +645,80 @@ export default function AdminSubscriptionsPage() {
                   <p className="text-sm text-gray-900">{formatDate(selectedSubscription.created_at)}</p>
                 </div>
               </div>
+
+              {selectedSubscription.status !== 'cancelled' && selectedSubscription.days_remaining > 0 && (
+                <div className="pt-4 border-t space-y-3">
+                  {/* Trocar Plano */}
+                  <div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => { setChangingPlan(v => !v); setCancelConfirming(false) }}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Trocar Plano
+                    </Button>
+
+                    {changingPlan && (
+                      <div className="mt-3 space-y-2">
+                        <Select value={selectedPriceId} onValueChange={setSelectedPriceId}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o novo plano..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availablePrices.map(p => (
+                              <SelectItem key={p.priceId} value={p.priceId}>
+                                {p.label} — {formatCurrency(p.amount / 100)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          className="w-full"
+                          disabled={!selectedPriceId || changePlanLoading}
+                          onClick={handleChangePlan}
+                        >
+                          {changePlanLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                          Confirmar Troca
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cancelar Assinatura */}
+                  <div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => { setCancelConfirming(v => !v); setChangingPlan(false) }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Cancelar Assinatura
+                    </Button>
+
+                    {cancelConfirming && (
+                      <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg space-y-2">
+                        <p className="text-sm text-red-800">
+                          O usuário manterá acesso até <strong>{formatDate(selectedSubscription.end_date)}</strong>. Confirmar cancelamento?
+                        </p>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="w-full"
+                          disabled={cancelLoading}
+                          onClick={handleCancelSubscription}
+                        >
+                          {cancelLoading ? <RefreshCw className="h-4 w-4 animate-spin mr-2" /> : null}
+                          Sim, Cancelar
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>
