@@ -121,6 +121,7 @@ export default function AdminSubscriptionsPage() {
     const isActive = selectedSubscription.status !== 'cancelled' && selectedSubscription.days_remaining > 0
     if (!isActive) return
 
+    setAvailablePrices([])
     fetch('/api/stripe/prices')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
