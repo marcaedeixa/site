@@ -152,9 +152,8 @@ export default function AdminSubscriptionsPage() {
     setLoading(true)
     try {
       await Promise.all([
-        loadStats(),
         loadSubscriptions(),
-        loadPlans()
+        loadPlans(),
       ])
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
@@ -164,104 +163,14 @@ export default function AdminSubscriptionsPage() {
     }
   }
 
-  const loadStats = async () => {
-    try {
-      // Simular estatísticas (em produção, criar uma API específica)
-      const { data: allSubs } = await supabase
-        .from('user_subscriptions')
-        .select(`
-          *,
-          subscription_plans(name, price_monthly)
-        `)
-
-      if (allSubs) {
-        const now = new Date()
-        const active = allSubs.filter(sub => 
-          sub.status === 'active' && new Date(sub.end_date) > now
-        )
-        const trial = active.filter(sub => sub.is_trial)
-        const expired = allSubs.filter(sub => 
-          sub.status === 'active' && new Date(sub.end_date) <= now
-        )
-
-        // Calcular receita mensal (últimos 30 dias)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        
-        const monthlyRevenue = active
-          .filter(sub => 
-            !sub.is_trial && 
-            new Date(sub.created_at) >= thirtyDaysAgo
-          )
-          .reduce((sum, sub) => {
-            const plan = sub.subscription_plans as { price_monthly?: number }
-            return sum + (plan?.price_monthly || 0)
-          }, 0)
-
-        const totalRevenue = active
-          .filter(sub => !sub.is_trial)
-          .reduce((sum, sub) => {
-            const plan = sub.subscription_plans as { price_monthly?: number }
-            return sum + (plan?.price_monthly || 0)
-          }, 0)
-
-        setStats({
-          totalSubscriptions: allSubs.length,
-          activeSubscriptions: active.length,
-          trialSubscriptions: trial.length,
-          expiredSubscriptions: expired.length,
-          monthlyRevenue,
-          totalRevenue
-        })
-      }
-    } catch (error) {
-      console.error('Erro ao carregar estatísticas:', error)
-    }
-  }
-
   const loadSubscriptions = async () => {
     try {
-      // Buscar assinaturas com joins para planos e usuários
-      const { data: subscriptionsData, error: subscriptionsError } = await supabase
-        .from('user_subscriptions')
-        .select(`
-          *,
-          subscription_plans(name)
-        `)
-        .order('created_at', { ascending: false })
+      const res = await fetch('/api/admin/subscriptions')
+      if (!res.ok) throw new Error('Falha ao buscar assinaturas')
+      const data = await res.json()
 
-      if (subscriptionsError) {
-        console.error('Erro ao buscar user_subscriptions:', subscriptionsError)
-        throw subscriptionsError
-      }
-
-      // Buscar usuários usando auth admin (service role)
-      const { data: usersData } = await supabase.auth.admin.listUsers()
-      const usersMap = new Map(usersData?.users?.map(user => [user.id, user]) || [])
-
-      const formattedSubs: UserSubscription[] = (subscriptionsData || []).map(sub => {
-        const now = new Date()
-        const endDate = new Date(sub.end_date)
-        const daysRemaining = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
-        
-        const user = usersMap.get(sub.user_id)
-        const plan = sub.subscription_plans as { name?: string }
-        
-        return {
-          id: sub.id,
-          user_id: sub.user_id,
-          user_email: user?.email || `Usuário ${sub.user_id}`,
-          plan_name: plan?.name || 'Plano não encontrado',
-          status: sub.status,
-          start_date: sub.start_date,
-          end_date: sub.end_date,
-          is_trial: sub.is_trial,
-          days_remaining: daysRemaining,
-          created_at: sub.created_at
-        }
-      })
-
-      setSubscriptions(formattedSubs)
+      setSubscriptions(data.subscriptions || [])
+      setStats(data.stats || stats)
     } catch (error) {
       console.error('Erro ao carregar assinaturas:', error)
     }
