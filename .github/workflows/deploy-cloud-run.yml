@@ -1,0 +1,73 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main]
+
+env:
+  PROJECT_ID: marca-e-deixa
+  REGION: us-east1
+  REPOSITORY: marca-e-deixa-site
+  SERVICE: marca-e-deixa-site
+  IMAGE: us-east1-docker.pkg.dev/marca-e-deixa/marca-e-deixa-site/app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build image
+        run: |
+          docker build \
+            -t ${{ env.IMAGE }}:${{ github.sha }} \
+            -t ${{ env.IMAGE }}:latest \
+            .
+
+      - name: Push image
+        run: |
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Write env vars file
+        run: |
+          cat > env-vars.yaml <<EOF
+          NEXT_PUBLIC_APP_URL: "${{ secrets.NEXT_PUBLIC_APP_URL }}"
+          NEXT_PUBLIC_SUPABASE_URL: "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: "${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}"
+          NEXT_PUBLIC_RECAPTCHA_SITE_KEY: "${{ secrets.NEXT_PUBLIC_RECAPTCHA_SITE_KEY }}"
+          STRIPE_MODE: "${{ secrets.STRIPE_MODE }}"
+          SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          STRIPE_SECRET_KEY: "${{ secrets.STRIPE_SECRET_KEY }}"
+          STRIPE_WEBHOOK_SECRET: "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+          RECAPTCHA_SECRET_KEY: "${{ secrets.RECAPTCHA_SECRET_KEY }}"
+          EOF
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image=${{ env.IMAGE }}:${{ github.sha }} \
+            --project=${{ env.PROJECT_ID }} \
+            --region=${{ env.REGION }} \
+            --platform=managed \
+            --allow-unauthenticated \
+            --port=3000 \
+            --memory=512Mi \
+            --env-vars-file=env-vars.yaml
+          rm -f env-vars.yaml
