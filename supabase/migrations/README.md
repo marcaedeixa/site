@@ -22,6 +22,7 @@ Por isso **todo arquivo aqui usa o prefixo `NNN_`**, sem exceção.
 | 010 | `create_objects_table` | `objects` |
 | 011 | `create_actors_table` | `actors` |
 | 012 | `alter_actors_add_missing_columns` | — (altera `actors`) |
+| 013 | `fix_admin_rls_recursion` | — (corrige recursão infinita nas políticas de admin) |
 
 ## Dependências que a ordem precisa respeitar
 
@@ -32,6 +33,19 @@ Por isso **todo arquivo aqui usa o prefixo `NNN_`**, sem exceção.
   `admin_users` dentro de um `EXISTS (SELECT 1 FROM admin_users ...)`.
 - **`007` antes de `008`** — `project_shares` cria uma política RLS sobre `project_data`.
 - **`011` antes de `012`** — não dá para alterar `actors` antes de criá-la.
+- **`013` por último** — substitui políticas criadas em 006 e 009.
+
+## Cuidado com políticas RLS auto-referentes
+
+Uma política sobre a tabela X que consulta a própria X causa recursão infinita
+(`42P17`) e deixa a tabela ilegível. Foi o que aconteceu com `admin_users`: as
+políticas faziam `EXISTS (SELECT 1 FROM admin_users ...)`, e isso derrubava
+também `admin_access_logs` e `landing_page_content`, que consultavam admin.
+
+A correção está em `013` — a checagem vive em funções `SECURITY DEFINER`
+(`is_active_admin()`, `is_active_super_admin()`), que rodam como dono da tabela
+e por isso não reentram no RLS. **Use essas funções em qualquer política nova
+que precise saber se o usuário é admin.**
 
 ## Antes de commitar qualquer migration nova
 

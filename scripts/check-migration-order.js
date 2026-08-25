@@ -18,7 +18,15 @@ const BUILTIN_TABLES = new Set(['auth.users', 'auth.identities', 'storage.object
 const BUILTIN_FUNCTIONS = new Set(['now', 'uuid_generate_v4', 'gen_random_uuid'])
 
 /** Catálogos do Postgres e palavras que aparecem depois de FROM sem ser tabela. */
-const IGNORED_SOURCES = /^(pg_|information_schema\.|only$|unnest|generate_series|jsonb_|json_)/
+const IGNORED_SOURCES = /^(pg_|information_schema\.|only$|public$|current_user$|session_user$|unnest|generate_series|jsonb_|json_)/
+
+/**
+ * Normaliza nomes de tabela: `public.projects` e `projects` são a mesma coisa,
+ * já que `public` é o schema padrão. Schemas explícitos como `auth.` ficam.
+ */
+function norm(name) {
+  return name.startsWith('public.') ? name.slice('public.'.length) : name
+}
 
 /**
  * Remove comentários e literais para não casar padrões dentro deles.
@@ -38,7 +46,7 @@ function strip(sql) {
 function collect(sql, regex, group = 1) {
   const out = new Set()
   let m
-  while ((m = regex.exec(sql)) !== null) out.add(m[group].toLowerCase())
+  while ((m = regex.exec(sql)) !== null) out.add(norm(m[group].toLowerCase()))
   return out
 }
 
