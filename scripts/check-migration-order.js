@@ -17,12 +17,22 @@ const DIR = path.join(__dirname, '..', 'supabase', 'migrations')
 const BUILTIN_TABLES = new Set(['auth.users', 'auth.identities', 'storage.objects'])
 const BUILTIN_FUNCTIONS = new Set(['now', 'uuid_generate_v4', 'gen_random_uuid'])
 
-/** Remove comentários e literais para não casar padrões dentro deles. */
+/** Catálogos do Postgres e palavras que aparecem depois de FROM sem ser tabela. */
+const IGNORED_SOURCES = /^(pg_|information_schema\.|only$|unnest|generate_series|jsonb_|json_)/
+
+/**
+ * Remove comentários e literais para não casar padrões dentro deles.
+ *
+ * Inclui identificadores entre aspas duplas: nomes de política como
+ * "Users can view actors from their projects" casavam com /FROM (\w+)/
+ * e produziam uma dependência inexistente chamada "their".
+ */
 function strip(sql) {
   return sql
     .replace(/--[^\n]*/g, ' ')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/'(?:[^']|'')*'/g, "''")
+    .replace(/"(?:[^"]|"")*"/g, '""')
 }
 
 function collect(sql, regex, group = 1) {
@@ -41,6 +51,12 @@ function analyze(sql) {
     policyOn: collect(s, /\bON\s+([a-z_][a-z0-9_.]*)\s*(?:FOR|USING|TO)\b/gi),
     createsFunctions: collect(s, /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([a-z_][a-z0-9_.]*)/gi),
     callsFunctions: collect(s, /EXECUTE\s+(?:FUNCTION|PROCEDURE)\s+([a-z_][a-z0-9_.]*)/gi),
+    // Tabelas lidas dentro de subconsultas — o caso das políticas RLS que fazem
+    // EXISTS (SELECT 1 FROM outra_tabela ...). Foi o que derrubou a aplicação
+    // no SQL Editor quando 008 consultava admin_users, criada só na 012.
+    readsFrom: new Set(
+      [...collect(s, /\b(?:FROM|JOIN)\s+([a-z_][a-z0-9_.]*)/gi)].filter(t => !IGNORED_SOURCES.test(t))
+    ),
   }
 }
 
@@ -63,7 +79,7 @@ function main() {
     const issues = []
 
     // Dependências precisam existir ANTES deste arquivo rodar.
-    const needed = new Set([...a.altersTables, ...a.referencesTables, ...a.policyOn])
+    const needed = new Set([...a.altersTables, ...a.referencesTables, ...a.policyOn, ...a.readsFrom])
     for (const t of needed) {
       if (a.createsTables.has(t)) continue // criada no próprio arquivo
       if (!tables.has(t)) issues.push(`tabela "${t}" ainda não existe`)
